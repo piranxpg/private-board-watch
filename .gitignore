@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+wrangler-dev.*.log
+npm-debug.log*
+.DS_Store
+*.zip
+.env
+crawler/feed.latest.json
+__pycache__/
+*.pyc
