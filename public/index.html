@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Private Board Watch</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div id="ageGate" class="gate" hidden>
+      <section class="gate-panel" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+        <p class="kicker">Private viewer</p>
+        <h1 id="gateTitle">성인용 링크가 포함될 수 있습니다</h1>
+        <p>
+          공개 게시글과 합법적인 원본 링크만 등록해서 사용하세요. 비동의 촬영물, 미성년 관련 콘텐츠,
+          유료/비공개 자료 우회 수집은 제외해야 합니다.
+        </p>
+        <div class="gate-actions">
+          <button id="acceptGate" class="primary">확인하고 입장</button>
+        </div>
+      </section>
+    </div>
+
+    <header class="topbar">
+      <div>
+        <p class="kicker">Private board watch</p>
+        <h1>NSFW 썸네일 모아보기</h1>
+      </div>
+      <div class="toolbar" aria-label="보기 설정">
+        <label class="search">
+          <span aria-hidden="true">⌕</span>
+          <input id="searchInput" type="search" placeholder="검색" autocomplete="off" />
+        </label>
+        <label class="switch">
+          <input id="blurToggle" type="checkbox" />
+          <span>블러</span>
+        </label>
+        <button id="refreshButton" class="icon-button" type="button" title="새로고침" aria-label="새로고침">
+          ↻
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <nav id="sourceTabs" class="tabs" aria-label="소스 필터"></nav>
+      <section id="status" class="status" aria-live="polite"></section>
+      <section id="grid" class="grid" aria-label="이미지 목록"></section>
+    </main>
+
+    <template id="cardTemplate">
+      <a class="thumb-card" target="_blank" rel="noreferrer noopener">
+        <figure>
+          <img loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" />
+          <figcaption>
+            <span class="source-name"></span>
+            <strong></strong>
+            <time></time>
+          </figcaption>
+        </figure>
+      </a>
+    </template>
+
+    <script src="/assets/app.js" type="module"></script>
+  </body>
+</html>
