@@ -1,0 +1,12 @@
+node_modules/
+.wrangler/
+wrangler-dev.*.log
+.git/
+.gitignore
+README.md
+npm-debug.log*
+*.zip
+.env
+crawler/feed.latest.json
+__pycache__/
+*.pyc
