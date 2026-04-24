@@ -1,0 +1,62 @@
+{
+  "settings": {
+    "maxSources": 10,
+    "maxItemsPerSource": 24,
+    "requestTimeoutMs": 8000,
+    "cacheSeconds": 300,
+    "requireHttps": true,
+    "allowUnknownImageTypes": true
+  },
+  "safety": {
+    "blockedKeywords": [
+      "미성년",
+      "중딩",
+      "고딩",
+      "학생",
+      "몰카",
+      "도촬",
+      "리벤지",
+      "강간",
+      "child",
+      "kid",
+      "teen",
+      "underage",
+      "minor",
+      "lolita",
+      "偷拍",
+      "未成年"
+    ],
+    "allowedImageDomains": [],
+    "allowedLinkDomains": []
+  },
+  "sources": [
+    {
+      "id": "sample-rss",
+      "name": "RSS 샘플",
+      "type": "rss",
+      "rank": 1,
+      "enabled": false,
+      "url": "https://example.com/feed.xml",
+      "homepage": "https://example.com",
+      "allowUnknownImageTypes": true
+    },
+    {
+      "id": "sample-jsonfeed",
+      "name": "JSON Feed 샘플",
+      "type": "jsonfeed",
+      "rank": 2,
+      "enabled": false,
+      "url": "https://example.com/feed.json",
+      "homepage": "https://example.com"
+    },
+    {
+      "id": "sample-reddit",
+      "name": "Reddit JSON 샘플",
+      "type": "reddit",
+      "rank": 3,
+      "enabled": false,
+      "url": "https://www.reddit.com/r/pics/.json?limit=25&raw_json=1",
+      "homepage": "https://www.reddit.com"
+    }
+  ]
+}
