@@ -1,0 +1,176 @@
+{
+  "settings": {
+    "hours": 12,
+    "max_items_per_source": 12,
+    "max_total_items": 500,
+    "request_timeout": 15,
+    "detail_timeout": 15,
+    "sleep_seconds": 0.7,
+    "kv_key": "feed:latest"
+  },
+  "keywords": [
+    "ㅇㅎ",
+    "ㅎㅂ",
+    "후방",
+    "약후",
+    "nsfw",
+    "몸매",
+    "수영복",
+    "비키니",
+    "ㅗㅜㅑ",
+    "모델",
+    "거유",
+    "슬랜더",
+    "ㅊㅈ",
+    "처자",
+    "민폐녀",
+    "결혼하면"
+  ],
+  "blocked_keywords": [
+    "미성년",
+    "중딩",
+    "고딩",
+    "학생",
+    "몰카",
+    "도촬",
+    "리벤지",
+    "강간",
+    "child",
+    "kid",
+    "teen",
+    "underage",
+    "minor",
+    "lolita",
+    "偷拍",
+    "未成年",
+    "추돌",
+    "충돌",
+    "gisa",
+    "블박",
+    "블랙박스"
+  ],
+  "sources": [
+    {
+      "id": "ruliweb-humor",
+      "name": "루리웹 유머게시판",
+      "rank": 1,
+      "url": "https://bbs.ruliweb.com/community/board/300143",
+      "link_allow": ["/community/board/300143/read/"]
+    },
+    {
+      "id": "ruliweb-mypi",
+      "name": "루리웹 마이피",
+      "rank": 2,
+      "url": "https://mypi.ruliweb.com/mypi_timeline.htm",
+      "pages": 3,
+      "link_allow": ["/mypi.htm", "/mypi_timeline.htm"]
+    },
+    {
+      "id": "clien-free",
+      "name": "클리앙 자유게시판",
+      "rank": 3,
+      "url": "https://www.clien.net/service/board/park",
+      "search_url_template": "https://www.clien.net/service/search?q={keyword}&sort=recency&boardCd=park&isBoard=true",
+      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
+      "keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
+      "search_page_param": "p",
+      "search_page_start": 0,
+      "link_allow": ["/service/board/park/"]
+    },
+    {
+      "id": "ppomppu-free",
+      "name": "뽐뿌 자유게시판",
+      "rank": 4,
+      "url": "https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard",
+      "search_url_template": "https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard&search_type=subject&keyword={keyword}",
+      "search_encoding": "cp949",
+      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
+      "link_allow": ["zboard/view.php?id=freeboard"]
+    },
+    {
+      "id": "ppomppu-humor",
+      "name": "뽐뿌 유머게시판",
+      "rank": 5,
+      "url": "https://www.ppomppu.co.kr/zboard/zboard.php?id=humor",
+      "search_url_template": "https://www.ppomppu.co.kr/zboard/zboard.php?id=humor&search_type=subject&keyword={keyword}",
+      "search_encoding": "cp949",
+      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
+      "link_allow": ["zboard/view.php?id=humor"]
+    },
+    {
+      "id": "mlbpark-bullpen",
+      "name": "MLB파크 불펜게시판",
+      "rank": 6,
+      "url": "https://mlbpark.donga.com/mp/b.php?b=bullpen",
+      "search_url_template": "https://mlbpark.donga.com/mp/b.php?m=search&b=bullpen&select=stt&query={keyword}",
+      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
+      "link_allow": ["/mp/b.php?b=bullpen"]
+    },
+    {
+      "id": "fmkorea-humor",
+      "name": "에펨코리아 유머게시판",
+      "rank": 7,
+      "url": "https://www.fmkorea.com/humor",
+      "link_allow_regex": ["^/\\d+$"]
+    },
+    {
+      "id": "bobaedream-free",
+      "name": "보배드림 자유게시판",
+      "rank": 8,
+      "url": "https://www.bobaedream.co.kr/list?code=freeb",
+      "link_allow": ["/view?code=freeb"]
+    },
+    {
+      "id": "bobaedream-nsfw",
+      "name": "보배드림 후방주의",
+      "rank": 9,
+      "url": "https://www.bobaedream.co.kr/list?code=nsfw",
+      "pages": 3,
+      "match_all": true,
+      "max_items_per_source": 36,
+      "link_allow": ["/view?code=nsfw"]
+    },
+    {
+      "id": "bobaedream-humor",
+      "name": "보배드림 유머게시판",
+      "rank": 10,
+      "url": "https://www.bobaedream.co.kr/list?code=strange",
+      "link_allow": ["/view?code=strange"]
+    },
+    {
+      "id": "etoland-humor",
+      "name": "이토랜드 약후",
+      "rank": 11,
+      "url": "https://www.etoland.co.kr/bbs/hgall.php?bo_table=etohumor07&sca=%BE%E0%C8%C4",
+      "pages": 3,
+      "match_all": true,
+      "max_items_per_source": 36,
+      "link_allow_regex": ["board\\.php\\?bo_table=etohumor07&wr_id=\\d+$"]
+    },
+    {
+      "id": "slrclub-free",
+      "name": "SLR클럽 자유게시판",
+      "rank": 12,
+      "url": "https://www.slrclub.com/bbs/zboard.php?id=free",
+      "link_allow": ["zboard.php?id=free"]
+    },
+    {
+      "id": "todayhumor-free",
+      "name": "오늘의유머 자유게시판",
+      "rank": 13,
+      "url": "https://www.todayhumor.co.kr/board/list.php?table=freeboard",
+      "search_url_template": "https://www.todayhumor.co.kr/board/list.php?kind=search&table=freeboard&search_table_name=freeboard&keyfield=subject&keyword={keyword}",
+      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
+      "link_allow": ["view.php?table=freeboard"]
+    },
+    {
+      "id": "todayhumor-humor",
+      "name": "오늘의유머 유머자료게시판",
+      "rank": 14,
+      "url": "https://www.todayhumor.co.kr/board/list.php?table=humordata",
+      "search_url_template": "https://www.todayhumor.co.kr/board/list.php?kind=search&table=humordata&search_table_name=humordata&keyfield=subject&keyword={keyword}",
+      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
+      "link_allow": ["view.php?table=humordata"]
+    }
+  ]
+}
