@@ -54,6 +54,14 @@ Cloudflare Pages Git 연동 설정:
 - Build command: 비워두거나 `npm install`
 - Build output directory: `public`
 
+현재 만든 Cloudflare 리소스:
+
+- Pages project: `private-board-watch`
+- Pages URL: `https://private-board-watch.pages.dev`
+- KV namespace: `private-board-watch-feed`
+- KV binding: `FEED_KV`
+- KV key: `feed:latest`
+
 ```bash
 npm.cmd run deploy
 ```
@@ -68,7 +76,6 @@ npm.cmd run deploy
 - `functions/`
 - `crawler/`
 - `package.json`
-- `package-lock.json`
 - `wrangler.toml`
 - `README.md`
 - `.gitignore`
