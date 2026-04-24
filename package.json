@@ -1,0 +1,16 @@
+{
+  "name": "private-board-watch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.7.1"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
