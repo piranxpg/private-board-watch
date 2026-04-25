@@ -104,7 +104,7 @@ jobs:
               print("Downloaded existing feed from KV.")
           PY
 
-      - name: Prune replace-existing sources
+      - name: Prune inactive and replace-existing sources
         run: |
           python - <<'PY'
           import json
@@ -115,27 +115,34 @@ jobs:
               raise SystemExit(0)
 
           config = json.loads(Path("crawler/board_sources.json").read_text(encoding="utf-8"))
+          active_ids = {
+              source.get("id")
+              for source in config.get("sources", [])
+              if source.get("id") and source.get("enabled", True)
+          }
           replace_ids = {
               source.get("id")
               for source in config.get("sources", [])
               if source.get("id") and source.get("replace_existing")
           }
-          if not replace_ids:
+          if not active_ids and not replace_ids:
               raise SystemExit(0)
 
           payload = json.loads(feed_path.read_text(encoding="utf-8"))
           payload["items"] = [
               item
               for item in payload.get("items", [])
-              if item.get("sourceId") not in replace_ids
+              if item.get("sourceId") in active_ids and item.get("sourceId") not in replace_ids
           ]
           payload["sources"] = [
               source
               for source in payload.get("sources", [])
-              if source.get("id") not in replace_ids
+              if source.get("id") in active_ids and source.get("id") not in replace_ids
           ]
           feed_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-          print("Pruned replace-existing sources:", ", ".join(sorted(replace_ids)))
+          print("Kept active sources:", ", ".join(sorted(active_ids)))
+          if replace_ids:
+              print("Pruned replace-existing sources:", ", ".join(sorted(replace_ids)))
           PY
 
       - name: Crawl and upload feed
