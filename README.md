@@ -46,6 +46,20 @@ Pages Function에서 KV를 읽으려면 Cloudflare Pages 프로젝트에 KV name
 - KV key: 기본값 `feed:latest`
 - 다른 key를 쓰려면 Pages 환경변수 `FEED_KV_KEY` 또는 `KV_KEY`를 설정
 
+## 자동 갱신
+
+GitHub Actions가 30분마다 크롤러를 실행해서 Cloudflare KV의 `feed:latest`를 갱신합니다.
+
+- Workflow: `.github/workflows/refresh-feed.yml`
+- Schedule: 30분마다 실행, GitHub cron은 UTC 기준입니다.
+- Manual run: GitHub Actions 탭에서 `Refresh feed` 워크플로를 `Run workflow`로 실행
+
+GitHub 저장소의 `Settings > Secrets and variables > Actions`에 아래 repository secrets를 등록해야 합니다.
+
+- `CLOUDFLARE_ACCOUNT_ID`: `30004ae152eccf899701379d0aab7ab6`
+- `CLOUDFLARE_KV_NAMESPACE_ID`: `10c1130443f34a948090a49d453ca8cd`
+- `CLOUDFLARE_API_TOKEN`: Cloudflare KV write 권한이 있는 API token
+
 ## 배포
 
 Cloudflare Pages Git 연동 설정:
