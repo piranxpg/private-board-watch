@@ -8,6 +8,7 @@ Cloudflare Pages에서 개인용으로 쓰는 공개 게시판 썸네일 링크 
 - `functions/api/feed.js`: 웹앱이 읽는 `/api/feed`
 - `crawler/crawl_to_kv.py`: 공개 게시판을 읽어 Cloudflare KV에 최신 피드를 저장하는 Python 스크립트
 - `crawler/board_sources.json`: 게시판 목록, 키워드, 차단 키워드 설정
+- `scheduler/dispatch-workflow.js`: Cloudflare Cron Worker가 GitHub Actions workflow를 호출하는 스크립트
 
 ## 로컬 웹앱 실행
 
@@ -48,18 +49,39 @@ Pages Function에서 KV를 읽으려면 Cloudflare Pages 프로젝트에 KV name
 
 ## 자동 갱신
 
-GitHub Actions가 30분마다 크롤러를 실행해서 Cloudflare KV의 `feed:latest`를 갱신합니다.
+Cloudflare Cron Worker가 30분마다 GitHub Actions의 `Refresh feed` workflow를 호출할 수 있도록 구성합니다. GitHub Actions는 호출을 받으면 크롤러를 실행해서 Cloudflare KV의 `feed:latest`를 갱신합니다.
 
+- Scheduler Worker: `private-board-watch-scheduler`
+- Scheduler config: `wrangler.scheduler.toml`
+- Cron: 매시 14분, 44분 실행. Cloudflare cron은 UTC 기준이지만 30분 주기라 한국 시간에서도 같은 분 단위로 동작합니다.
 - Workflow: `.github/workflows/refresh-feed.yml`
-- Schedule: 30분마다 실행, GitHub cron은 UTC 기준입니다.
 - 기존 KV 값을 먼저 내려받은 뒤 새 크롤링 결과와 병합하므로 중복은 제거하고 누적합니다.
 - Manual run: GitHub Actions 탭에서 `Refresh feed` 워크플로를 `Run workflow`로 실행
+
+Scheduler Worker 배포와 secret 설정이 끝나면 `.github/workflows/refresh-feed.yml`의 `schedule` 항목을 제거해서 GitHub 자체 예약 실행과 중복되지 않게 합니다.
 
 GitHub 저장소의 `Settings > Secrets and variables > Actions`에 아래 repository secrets를 등록해야 합니다.
 
 - `CLOUDFLARE_ACCOUNT_ID`: `30004ae152eccf899701379d0aab7ab6`
 - `CLOUDFLARE_KV_NAMESPACE_ID`: `10c1130443f34a948090a49d453ca8cd`
 - `CLOUDFLARE_API_TOKEN`: Cloudflare KV write 권한이 있는 API token
+
+Scheduler Worker에는 GitHub workflow를 실행할 수 있는 token을 Cloudflare secret으로 등록해야 합니다.
+
+1. GitHub fine-grained personal access token을 만듭니다.
+   - Repository access: `piranxpg/private-board-watch`
+   - Repository permissions: `Actions`를 `Read and write`
+2. Cloudflare Worker secret으로 저장합니다.
+
+```bash
+.\node_modules\.bin\wrangler.cmd secret put GITHUB_ACTIONS_TOKEN --config wrangler.scheduler.toml
+```
+
+3. Scheduler Worker를 배포합니다.
+
+```bash
+npm.cmd run scheduler:deploy
+```
 
 ## 배포
 
@@ -90,8 +112,10 @@ npm.cmd run deploy
 - `public/`
 - `functions/`
 - `crawler/`
+- `scheduler/`
 - `package.json`
 - `wrangler.toml`
+- `wrangler.scheduler.toml`
 - `README.md`
 - `.gitignore`
 - `.cfignore`
