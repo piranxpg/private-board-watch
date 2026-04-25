@@ -63,7 +63,7 @@
       "rank": 2,
       "url": "https://mypi.ruliweb.com/mypi_timeline.htm",
       "pages": 3,
-      "link_allow": ["/mypi.htm", "/mypi_timeline.htm"]
+      "link_allow_regex": ["mypi\\.htm\\?nid=\\d+&num=\\d+"]
     },
     {
       "id": "clien-free",
