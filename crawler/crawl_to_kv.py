@@ -20,6 +20,13 @@ from bs4 import BeautifulSoup
 
 KST = timezone(timedelta(hours=9))
 IMAGE_EXTENSIONS = (".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp")
+DEFAULT_FALLBACK_IMAGE_URL = (
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'%3E"
+    "%3Crect width='640' height='360' fill='%2322292f'/%3E"
+    "%3Cpath d='M228 192h184v24H228zM256 144h128v24H256z' fill='%239aa7b2'/%3E"
+    "%3Ctext x='320' y='250' text-anchor='middle' font-family='Arial,sans-serif' "
+    "font-size='28' fill='%23d8dee6'%3ELINK%3C/text%3E%3C/svg%3E"
+)
 SKIP_IMAGE_HINTS = (
     "blank",
     "btn_",
@@ -207,7 +214,7 @@ def source_list_urls(source: dict[str, Any], default_keywords: list[str] | None 
 def canonical_url(url: str) -> str:
     parsed = urlparse(url)
     query = parse_qs(parsed.query, keep_blank_values=True)
-    keep_keys = {"id", "no", "num", "document_srl", "wr_id", "idx", "code", "bo_table", "table", "b"}
+    keep_keys = {"id", "no", "num", "document_srl", "wr_id", "idx", "code", "bo_table", "table", "b", "nid"}
     kept = []
     for key in sorted(query):
         if key.lower() in keep_keys:
@@ -277,7 +284,11 @@ def discover_candidates(
             if key in seen:
                 continue
             seen.add(key)
-            candidates.append({"title": title, "url": url})
+            candidate = {"title": title, "url": url}
+            published_at = extract_candidate_published_at(anchor)
+            if published_at:
+                candidate["publishedAt"] = published_at
+            candidates.append(candidate)
 
     if not candidates and errors:
         raise RuntimeError("; ".join(errors[:3]))
@@ -325,6 +336,15 @@ def find_image_url(soup: BeautifulSoup, page_url: str) -> str:
     return ""
 
 
+def fallback_image_url(source: dict[str, Any], page_url: str) -> str:
+    image_url = source.get("fallback_image_url") or ""
+    if not image_url and source.get("allow_missing_image"):
+        image_url = DEFAULT_FALLBACK_IMAGE_URL
+    if image_url.startswith("data:"):
+        return image_url
+    return urljoin(page_url, image_url) if image_url else ""
+
+
 def is_usable_image_url(value: str) -> bool:
     if not value:
         return False
@@ -355,6 +375,27 @@ def parse_published_at(soup: BeautifulSoup) -> str:
     return datetime.now(KST).isoformat()
 
 
+def extract_candidate_published_at(anchor: Any) -> str:
+    parent = anchor
+    for _ in range(5):
+        parent = getattr(parent, "parent", None)
+        if not parent:
+            break
+        text = display_text(parent.get_text(" ", strip=True))
+        for pattern in (
+            r"\d{4}[-./]\d{2}[-./]\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?",
+            r"\d{4}/\d{2}/\d{2}\s+(?:AM|PM)\s+\d{1,2}:\d{2}",
+            r"\d{2}-\d{2}\s+\d{1,2}:\d{2}",
+        ):
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if not match:
+                continue
+            normalized = normalize_date(match.group(0))
+            if normalized:
+                return normalized
+    return ""
+
+
 def is_recent(value: str, hours: int) -> bool:
     if not value:
         return True
@@ -371,11 +412,39 @@ def normalize_date(value: str) -> str:
     value = display_text(value)
     if not value:
         return ""
+    am_pm_match = re.search(
+        r"(\d{4})/(\d{2})/(\d{2})\s+(AM|PM)\s+(\d{1,2}):(\d{2})",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if am_pm_match:
+        year, month, day, meridiem, hour, minute = am_pm_match.groups()
+        hour_value = int(hour)
+        if meridiem.upper() == "PM" and hour_value < 12:
+            hour_value += 12
+        if meridiem.upper() == "AM" and hour_value == 12:
+            hour_value = 0
+        return datetime(
+            int(year),
+            int(month),
+            int(day),
+            hour_value,
+            int(minute),
+            tzinfo=KST,
+        ).isoformat()
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(KST).isoformat()
     except ValueError:
         pass
-    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y.%m.%d %H:%M", "%Y-%m-%d %H:%M", "%m-%d %H:%M"):
+    for pattern in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M:%S",
+        "%Y.%m.%d %H:%M:%S",
+        "%Y.%m.%d %H:%M",
+        "%Y-%m-%d %H:%M",
+        "%Y/%m/%d %H:%M",
+        "%m-%d %H:%M",
+    ):
         try:
             parsed = datetime.strptime(value, pattern)
             if pattern.startswith("%m"):
@@ -408,11 +477,11 @@ def crawl_source(
         try:
             detail_html = fetch_text(session, candidate["url"], settings.detail_timeout)
             soup = BeautifulSoup(detail_html, "html.parser")
-            published_at = parse_published_at(soup)
+            published_at = candidate.get("publishedAt") or parse_published_at(soup)
             if not is_recent(published_at, settings.hours):
                 continue
 
-            image_url = find_image_url(soup, candidate["url"])
+            image_url = find_image_url(soup, candidate["url"]) or fallback_image_url(source, candidate["url"])
             if not image_url:
                 continue
             if has_blocked_keyword(f"{candidate['title']} {candidate['url']} {image_url}", blocked_keywords):
