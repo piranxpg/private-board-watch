@@ -31,7 +31,7 @@ export async function onRequestGet(context) {
   const requestUrl = new URL(context.request.url);
   const config = await loadConfig(context);
   const refresh = requestUrl.searchParams.has("refresh");
-  const limit = clamp(toNumber(requestUrl.searchParams.get("limit"), 80), 1, 200);
+  const limit = clamp(toNumber(requestUrl.searchParams.get("limit"), 80), 1, 500);
   const selectedSource = requestUrl.searchParams.get("source") || "all";
   const cacheSeconds = clamp(toNumber(config.settings.cacheSeconds, 300), 0, 3600);
 
