@@ -103,6 +103,10 @@ def source_keywords(source: dict[str, Any], default_keywords: list[str]) -> list
     return source.get("keywords") or default_keywords
 
 
+def source_blocked_keywords(source: dict[str, Any], default_blocked_keywords: list[str]) -> list[str]:
+    return [*default_blocked_keywords, *source.get("blocked_keywords", [])]
+
+
 def source_item_limit(source: dict[str, Any], settings: CrawlSettings) -> int:
     value = source.get("max_items_per_source", source.get("max_items", settings.max_items_per_source))
     return max(1, int(value or settings.max_items_per_source))
@@ -244,6 +248,13 @@ def canonical_url(url: str, source: dict[str, Any] | None = None) -> str:
     return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", clean_query, ""))
 
 
+def source_blocked_urls(source: dict[str, Any]) -> set[str]:
+    return {
+        canonical_url(urljoin(source["url"], str(url)), source)
+        for url in source.get("blocked_urls", [])
+    }
+
+
 def is_allowed_link(url: str, source: dict[str, Any]) -> bool:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
@@ -274,6 +285,8 @@ def discover_candidates(
     seen: set[str] = set()
     errors: list[str] = []
     active_keywords = source_keywords(source, keywords)
+    active_blocked_keywords = source_blocked_keywords(source, blocked_keywords)
+    active_blocked_urls = source_blocked_urls(source)
 
     for index, list_url in enumerate(source_list_urls(source, keywords)):
         if index:
@@ -293,7 +306,7 @@ def discover_candidates(
                 continue
             if active_keywords and not has_keyword(title, active_keywords):
                 continue
-            if has_blocked_keyword(title, blocked_keywords):
+            if has_blocked_keyword(title, active_blocked_keywords):
                 continue
 
             url = urljoin(list_url, anchor.get("href", ""))
@@ -301,6 +314,8 @@ def discover_candidates(
                 continue
 
             key = canonical_url(url, source)
+            if key in active_blocked_urls:
+                continue
             if key in seen:
                 continue
             seen.add(key)
@@ -485,6 +500,7 @@ def crawl_source(
     blocked_keywords: list[str],
     settings: CrawlSettings,
 ) -> tuple[list[dict[str, Any]], str | None]:
+    active_blocked_keywords = source_blocked_keywords(source, blocked_keywords)
     try:
         candidates = discover_candidates(session, source, keywords, blocked_keywords, settings)
     except Exception as exc:
@@ -510,7 +526,7 @@ def crawl_source(
             image_url = find_image_url(soup, candidate["url"]) or fallback_image_url(source, candidate["url"])
             if not image_url:
                 continue
-            if has_blocked_keyword(f"{candidate['title']} {candidate['url']} {image_url}", blocked_keywords):
+            if has_blocked_keyword(f"{candidate['title']} {candidate['url']} {image_url}", active_blocked_keywords):
                 continue
 
             link = canonical_url(candidate["url"], source)
@@ -540,11 +556,13 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
     all_items: list[dict[str, Any]] = []
     source_summaries: list[dict[str, Any]] = []
     replace_source_ids: list[str] = []
+    blocked_urls: list[str] = []
 
     for source in sorted(sources, key=lambda item: item.get("rank", 999)):
         log(f"crawl: {source.get('name', source['id'])}")
         items, error = crawl_source(session, source, keywords, blocked_keywords, settings)
         all_items.extend(items)
+        blocked_urls.extend(source_blocked_urls(source))
         if source.get("replace_existing"):
             replace_source_ids.append(source["id"])
         summary = {
@@ -568,6 +586,7 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
         "sources": source_summaries,
         "items": all_items,
         "_replaceSourceIds": replace_source_ids,
+        "_blockedUrls": blocked_urls,
     }
 
 
@@ -582,6 +601,11 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
         for source_id in new_payload.get("_replaceSourceIds", [])
         if isinstance(source_id, str)
     }
+    blocked_urls = {
+        url
+        for url in new_payload.get("_blockedUrls", [])
+        if isinstance(url, str)
+    }
     existing_items = existing_payload.get("items") if isinstance(existing_payload.get("items"), list) else []
     if active_source_ids:
         existing_items = [
@@ -590,7 +614,17 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
             if not isinstance(item, dict)
             or (item.get("sourceId") in active_source_ids and item.get("sourceId") not in replace_source_ids)
         ]
+    existing_items = [
+        item
+        for item in existing_items
+        if not isinstance(item, dict) or item.get("link") not in blocked_urls
+    ]
     new_items = new_payload.get("items") if isinstance(new_payload.get("items"), list) else []
+    new_items = [
+        item
+        for item in new_items
+        if not isinstance(item, dict) or item.get("link") not in blocked_urls
+    ]
     items = dedupe_items([*new_items, *existing_items])
     items.sort(key=lambda item: item.get("publishedAt") or "", reverse=True)
     items = items[: settings.max_total_items]
@@ -618,6 +652,7 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
         "items": items,
     }
     payload.pop("_replaceSourceIds", None)
+    payload.pop("_blockedUrls", None)
     return payload
 
 
