@@ -1,0 +1,54 @@
+name: Refresh feed
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-feed
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install crawler dependencies
+        run: pip install -r crawler/requirements.txt
+
+      - name: Ensure MyPi owner id is preserved
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crawler/crawl_to_kv.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'keep_keys = {"id", "no", "num", "document_srl", "wr_id", "idx", "code", "bo_table", "table", "b"}'
+          new = 'keep_keys = {"id", "no", "num", "document_srl", "wr_id", "idx", "code", "bo_table", "table", "b", "nid"}'
+          if old in text:
+              path.write_text(text.replace(old, new), encoding="utf-8")
+          elif '"nid"' not in text:
+              raise SystemExit("crawler/crawl_to_kv.py must preserve the MyPi nid query parameter")
+          PY
+
+      - name: Crawl and upload feed
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          KV_KEY: feed:latest
+        run: python crawler/crawl_to_kv.py --out crawler/feed.latest.json
