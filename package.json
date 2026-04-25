@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler pages dev public",
-    "deploy": "wrangler pages deploy public"
+    "deploy": "wrangler pages deploy public",
+    "scheduler:deploy": "wrangler deploy --config wrangler.scheduler.toml",
+    "scheduler:dev": "wrangler dev --config wrangler.scheduler.toml --test-scheduled"
   },
   "dependencies": {
     "fast-xml-parser": "^5.7.1"
