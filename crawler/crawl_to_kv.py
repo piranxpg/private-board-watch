@@ -432,10 +432,6 @@ def normalize_date(value: str) -> str:
             int(minute),
             tzinfo=KST,
         ).isoformat()
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(KST).isoformat()
-    except ValueError:
-        pass
     for pattern in (
         "%Y-%m-%d %H:%M:%S",
         "%Y/%m/%d %H:%M:%S",
@@ -452,6 +448,13 @@ def normalize_date(value: str) -> str:
             return parsed.replace(tzinfo=KST).isoformat()
         except ValueError:
             continue
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=KST).isoformat()
+        return parsed.astimezone(KST).isoformat()
+    except ValueError:
+        pass
     return ""
 
 
