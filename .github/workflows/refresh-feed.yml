@@ -104,7 +104,7 @@ jobs:
               print("Downloaded existing feed from KV.")
           PY
 
-      - name: Prune inactive and replace-existing sources
+      - name: Prune inactive, replace-existing, and stale links
         run: |
           python - <<'PY'
           import json
@@ -129,11 +129,16 @@ jobs:
               raise SystemExit(0)
 
           payload = json.loads(feed_path.read_text(encoding="utf-8"))
-          payload["items"] = [
-              item
-              for item in payload.get("items", [])
-              if item.get("sourceId") in active_ids and item.get("sourceId") not in replace_ids
-          ]
+
+          def keep_item(item):
+              link = item.get("link", "")
+              if item.get("sourceId") not in active_ids or item.get("sourceId") in replace_ids:
+                  return False
+              if item.get("sourceId") == "etoland-humor" and "/bbs/board.php?bo_table=etohumor07" in link:
+                  return False
+              return True
+
+          payload["items"] = [item for item in payload.get("items", []) if keep_item(item)]
           payload["sources"] = [
               source
               for source in payload.get("sources", [])
