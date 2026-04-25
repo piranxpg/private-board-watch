@@ -63,6 +63,7 @@
       "rank": 2,
       "url": "https://mypi.ruliweb.com/mypi_timeline.htm",
       "pages": 3,
+      "allow_missing_image": true,
       "link_allow_regex": ["mypi\\.htm\\?nid=\\d+&num=\\d+"]
     },
     {
