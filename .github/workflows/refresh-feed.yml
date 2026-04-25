@@ -43,6 +43,31 @@ jobs:
               raise SystemExit("crawler/crawl_to_kv.py must preserve the MyPi nid query parameter")
           PY
 
+      - name: Ensure fallback dates preserve list order
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crawler/crawl_to_kv.py")
+          text = path.read_text(encoding="utf-8")
+
+          old_return = "    return datetime.now(KST).isoformat()\n\n\ndef extract_candidate_published_at"
+          if old_return in text:
+              text = text.replace(old_return, "    return \"\"\n\n\ndef extract_candidate_published_at")
+
+          old_loop = "    items: list[dict[str, Any]] = []\n    item_limit = source_item_limit(source, settings)\n    for candidate in candidates:"
+          new_loop = "    items: list[dict[str, Any]] = []\n    item_limit = source_item_limit(source, settings)\n    crawl_started = datetime.now(KST)\n    for position, candidate in enumerate(candidates):"
+          if old_loop in text:
+              text = text.replace(old_loop, new_loop)
+
+          old_date = '            published_at = candidate.get("publishedAt") or parse_published_at(soup)\n            if not is_recent'
+          new_date = '            published_at = candidate.get("publishedAt") or parse_published_at(soup)\n            if not published_at:\n                published_at = (crawl_started - timedelta(seconds=position)).isoformat()\n            if not is_recent'
+          if old_date in text:
+              text = text.replace(old_date, new_date)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Download existing feed from KV
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
