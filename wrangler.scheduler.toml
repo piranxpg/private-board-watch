@@ -1,0 +1,12 @@
+name = "private-board-watch-scheduler"
+main = "scheduler/dispatch-workflow.js"
+compatibility_date = "2026-04-25"
+
+[vars]
+GITHUB_OWNER = "piranxpg"
+GITHUB_REPO = "private-board-watch"
+GITHUB_WORKFLOW_ID = "refresh-feed.yml"
+GITHUB_REF = "main"
+
+[triggers]
+crons = [ "14,44 * * * *" ]
