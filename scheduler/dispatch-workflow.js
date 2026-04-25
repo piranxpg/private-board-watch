@@ -10,7 +10,8 @@ function envValue(env, key, fallback) {
 async function dispatchWorkflow(env, reason) {
   const token = env.GITHUB_ACTIONS_TOKEN;
   if (!token) {
-    throw new Error("Missing GITHUB_ACTIONS_TOKEN secret.");
+    console.warn("Missing GITHUB_ACTIONS_TOKEN secret; skipping dispatch.");
+    return;
   }
 
   const owner = envValue(env, "GITHUB_OWNER", DEFAULT_OWNER);
