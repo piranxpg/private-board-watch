@@ -52,6 +52,7 @@ GitHub Actions가 30분마다 크롤러를 실행해서 Cloudflare KV의 `feed:l
 
 - Workflow: `.github/workflows/refresh-feed.yml`
 - Schedule: 30분마다 실행, GitHub cron은 UTC 기준입니다.
+- 기존 KV 값을 먼저 내려받은 뒤 새 크롤링 결과와 병합하므로 중복은 제거하고 누적합니다.
 - Manual run: GitHub Actions 탭에서 `Refresh feed` 워크플로를 `Run workflow`로 실행
 
 GitHub 저장소의 `Settings > Secrets and variables > Actions`에 아래 repository secrets를 등록해야 합니다.
