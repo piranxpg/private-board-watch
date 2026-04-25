@@ -45,6 +45,42 @@ jobs:
               raise SystemExit("crawler/crawl_to_kv.py must preserve the MyPi nid query parameter")
           PY
 
+      - name: Download existing feed from KV
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          KV_KEY: feed:latest
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from urllib.parse import quote
+
+          import requests
+
+          account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          namespace_id = os.environ["CLOUDFLARE_KV_NAMESPACE_ID"]
+          api_token = os.environ["CLOUDFLARE_API_TOKEN"]
+          key = os.environ.get("KV_KEY", "feed:latest")
+          url = (
+              "https://api.cloudflare.com/client/v4/accounts/"
+              f"{account_id}/storage/kv/namespaces/{namespace_id}/values/{quote(key, safe='')}"
+          )
+
+          response = requests.get(
+              url,
+              headers={"Authorization": f"Bearer {api_token}"},
+              timeout=30,
+          )
+          if response.status_code == 404:
+              print("No existing feed found; starting fresh.")
+          else:
+              response.raise_for_status()
+              Path("crawler/feed.latest.json").write_text(response.text, encoding="utf-8")
+              print("Downloaded existing feed from KV.")
+          PY
+
       - name: Crawl and upload feed
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
