@@ -145,7 +145,7 @@
       "pages": 3,
       "match_all": true,
       "max_items_per_source": 36,
-      "link_allow_regex": ["board\\.php\\?bo_table=etohumor07&wr_id=\\d+$"]
+      "link_allow_regex": ["hgall\\.php\\?bo_table=etohumor07&wr_id=\\d+&tb_tap=hoobang"]
     },
     {
       "id": "slrclub-free",
