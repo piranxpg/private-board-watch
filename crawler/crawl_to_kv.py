@@ -126,11 +126,29 @@ def make_session() -> requests.Session:
 
 
 def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
-    response = session.get(url, timeout=timeout)
-    response.raise_for_status()
-    if not response.encoding or response.encoding.lower() == "iso-8859-1":
-        response.encoding = response.apparent_encoding or "utf-8"
-    return response.text
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            response = session.get(url, timeout=timeout)
+            response.raise_for_status()
+            if not response.encoding or response.encoding.lower() == "iso-8859-1":
+                response.encoding = response.apparent_encoding or "utf-8"
+            return response.text
+        except requests.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else 0
+            if status_code < 500 or attempt == 2:
+                raise
+            last_error = exc
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            if attempt == 2:
+                raise
+            last_error = exc
+
+        time.sleep(0.8 * (attempt + 1))
+
+    if last_error:
+        raise last_error
+    raise RuntimeError(f"failed to fetch {url}")
 
 
 def with_query_param(url: str, key: str, value: str) -> str:
@@ -211,10 +229,12 @@ def source_list_urls(source: dict[str, Any], default_keywords: list[str] | None 
     return urls
 
 
-def canonical_url(url: str) -> str:
+def canonical_url(url: str, source: dict[str, Any] | None = None) -> str:
     parsed = urlparse(url)
     query = parse_qs(parsed.query, keep_blank_values=True)
     keep_keys = {"id", "no", "num", "document_srl", "wr_id", "idx", "code", "bo_table", "table", "b", "nid"}
+    if source:
+        keep_keys.update(str(key).lower() for key in source.get("canonical_keep_keys", []))
     kept = []
     for key in sorted(query):
         if key.lower() in keep_keys:
@@ -280,7 +300,7 @@ def discover_candidates(
             if not is_allowed_link(url, source):
                 continue
 
-            key = canonical_url(url)
+            key = canonical_url(url, source)
             if key in seen:
                 continue
             seen.add(key)
@@ -372,7 +392,7 @@ def parse_published_at(soup: BeautifulSoup) -> str:
         iso = normalize_date(value)
         if iso:
             return iso
-    return datetime.now(KST).isoformat()
+    return ""
 
 
 def extract_candidate_published_at(anchor: Any) -> str:
@@ -472,7 +492,8 @@ def crawl_source(
 
     items: list[dict[str, Any]] = []
     item_limit = source_item_limit(source, settings)
-    for candidate in candidates:
+    crawl_started = datetime.now(KST)
+    for position, candidate in enumerate(candidates):
         if len(items) >= item_limit:
             break
 
@@ -481,6 +502,8 @@ def crawl_source(
             detail_html = fetch_text(session, candidate["url"], settings.detail_timeout)
             soup = BeautifulSoup(detail_html, "html.parser")
             published_at = candidate.get("publishedAt") or parse_published_at(soup)
+            if not published_at:
+                published_at = (crawl_started - timedelta(seconds=position)).isoformat()
             if not is_recent(published_at, settings.hours):
                 continue
 
@@ -490,7 +513,7 @@ def crawl_source(
             if has_blocked_keyword(f"{candidate['title']} {candidate['url']} {image_url}", blocked_keywords):
                 continue
 
-            link = canonical_url(candidate["url"])
+            link = canonical_url(candidate["url"], source)
             items.append(
                 {
                     "id": f"{source['id']}:{hashlib.sha1(link.encode('utf-8')).hexdigest()[:12]}",
@@ -516,11 +539,14 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
     session = make_session()
     all_items: list[dict[str, Any]] = []
     source_summaries: list[dict[str, Any]] = []
+    replace_source_ids: list[str] = []
 
     for source in sorted(sources, key=lambda item: item.get("rank", 999)):
         log(f"crawl: {source.get('name', source['id'])}")
         items, error = crawl_source(session, source, keywords, blocked_keywords, settings)
         all_items.extend(items)
+        if source.get("replace_existing"):
+            replace_source_ids.append(source["id"])
         summary = {
             "id": source["id"],
             "name": source.get("name", source["id"]),
@@ -541,27 +567,58 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
         "generatedAt": datetime.now(KST).isoformat(),
         "sources": source_summaries,
         "items": all_items,
+        "_replaceSourceIds": replace_source_ids,
     }
 
 
 def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any], settings: CrawlSettings) -> dict[str, Any]:
+    active_source_ids = {
+        source.get("id")
+        for source in new_payload.get("sources", [])
+        if isinstance(source, dict) and source.get("id")
+    }
+    replace_source_ids = {
+        source_id
+        for source_id in new_payload.get("_replaceSourceIds", [])
+        if isinstance(source_id, str)
+    }
     existing_items = existing_payload.get("items") if isinstance(existing_payload.get("items"), list) else []
+    if active_source_ids:
+        existing_items = [
+            item
+            for item in existing_items
+            if not isinstance(item, dict)
+            or (item.get("sourceId") in active_source_ids and item.get("sourceId") not in replace_source_ids)
+        ]
     new_items = new_payload.get("items") if isinstance(new_payload.get("items"), list) else []
     items = dedupe_items([*new_items, *existing_items])
     items.sort(key=lambda item: item.get("publishedAt") or "", reverse=True)
     items = items[: settings.max_total_items]
 
+    existing_sources = existing_payload.get("sources") if isinstance(existing_payload.get("sources"), list) else []
+    if active_source_ids:
+        existing_sources = [
+            source
+            for source in existing_sources
+            if (
+                isinstance(source, dict)
+                and source.get("id") in active_source_ids
+                and source.get("id") not in replace_source_ids
+            )
+        ]
     sources = merge_source_summaries(
-        existing_payload.get("sources") if isinstance(existing_payload.get("sources"), list) else [],
+        existing_sources,
         new_payload.get("sources") if isinstance(new_payload.get("sources"), list) else [],
         items,
     )
 
-    return {
+    payload = {
         **new_payload,
         "sources": sources,
         "items": items,
     }
+    payload.pop("_replaceSourceIds", None)
+    return payload
 
 
 def merge_source_summaries(
