@@ -1,4 +1,4 @@
-const apiUrl = "/api/feed?limit=120";
+const apiUrl = "/api/feed?limit=500";
 const state = {
   allItems: [],
   sources: [],
