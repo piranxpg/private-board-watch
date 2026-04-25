@@ -104,10 +104,13 @@
       "rank": 6,
       "url": "https://mlbpark.donga.com/mp/b.php?search_select=sct&search_input=&select=spf&m=search&b=bullpen&query=%EC%A3%BC%EB%B2%88%EB%82%98/17%EA%B8%88/19%EA%B8%88",
       "pages": 3,
+      "page_param": "p",
       "match_all": true,
       "max_items_per_source": 36,
       "allow_missing_image": true,
-      "link_allow_regex": ["^/mp/b\\.php\\?.*\\bb=bullpen\\b.*\\bm=view\\b"]
+      "replace_existing": true,
+      "canonical_keep_keys": ["b", "id", "select", "query"],
+      "link_allow_regex": ["^/mp/b\\.php\\?(?=.*\\bb=bullpen\\b)(?=.*\\bm=view\\b)(?=.*\\bselect=spf\\b)(?=.*\\bquery=(?:%EC%A3%BC%EB%B2%88%EB%82%98%2F17%EA%B8%88%2F19%EA%B8%88|%EC%A3%BC%EB%B2%88%EB%82%98/17%EA%B8%88/19%EA%B8%88|주번나/17금/19금))"]
     },
     {
       "id": "fmkorea-humor",
