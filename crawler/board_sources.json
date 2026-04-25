@@ -102,22 +102,26 @@
       "id": "mlbpark-bullpen",
       "name": "MLB파크 불펜게시판",
       "rank": 6,
-      "url": "https://mlbpark.donga.com/mp/b.php?b=bullpen",
-      "search_url_template": "https://mlbpark.donga.com/mp/b.php?m=search&b=bullpen&select=stt&query={keyword}",
-      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매", "거유", "슬랜더", "ㅊㅈ", "처자"],
-      "link_allow": ["/mp/b.php?b=bullpen"]
+      "url": "https://mlbpark.donga.com/mp/b.php?search_select=sct&search_input=&select=spf&m=search&b=bullpen&query=%EC%A3%BC%EB%B2%88%EB%82%98/17%EA%B8%88/19%EA%B8%88",
+      "pages": 3,
+      "match_all": true,
+      "max_items_per_source": 36,
+      "allow_missing_image": true,
+      "link_allow_regex": ["^/mp/b\\.php\\?.*\\bb=bullpen\\b.*\\bm=view\\b"]
     },
     {
       "id": "fmkorea-humor",
       "name": "에펨코리아 유머게시판",
       "rank": 7,
-      "url": "https://www.fmkorea.com/humor",
-      "link_allow_regex": ["^/\\d+$"]
+      "url": "https://www.fmkorea.com/index.php?mid=humor&category=3331461695",
+      "pages": 3,
+      "link_allow_regex": ["^/index\\.php\\?mid=humor&category=3331461695&document_srl=\\d+"]
     },
     {
       "id": "bobaedream-free",
       "name": "보배드림 자유게시판",
       "rank": 8,
+      "enabled": false,
       "url": "https://www.bobaedream.co.kr/list?code=freeb",
       "link_allow": ["/view?code=freeb"]
     },
@@ -135,6 +139,7 @@
       "id": "bobaedream-humor",
       "name": "보배드림 유머게시판",
       "rank": 10,
+      "enabled": false,
       "url": "https://www.bobaedream.co.kr/list?code=strange",
       "link_allow": ["/view?code=strange"]
     },
