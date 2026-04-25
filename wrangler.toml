@@ -1,3 +1,7 @@
 name = "private-board-watch"
 compatibility_date = "2026-04-24"
 pages_build_output_dir = "public"
+
+[[kv_namespaces]]
+binding = "FEED_KV"
+id = "10c1130443f34a948090a49d453ca8cd"
