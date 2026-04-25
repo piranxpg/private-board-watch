@@ -79,6 +79,40 @@ jobs:
               print("Downloaded existing feed from KV.")
           PY
 
+      - name: Prune replace-existing sources
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          feed_path = Path("crawler/feed.latest.json")
+          if not feed_path.exists():
+              raise SystemExit(0)
+
+          config = json.loads(Path("crawler/board_sources.json").read_text(encoding="utf-8"))
+          replace_ids = {
+              source.get("id")
+              for source in config.get("sources", [])
+              if source.get("id") and source.get("replace_existing")
+          }
+          if not replace_ids:
+              raise SystemExit(0)
+
+          payload = json.loads(feed_path.read_text(encoding="utf-8"))
+          payload["items"] = [
+              item
+              for item in payload.get("items", [])
+              if item.get("sourceId") not in replace_ids
+          ]
+          payload["sources"] = [
+              source
+              for source in payload.get("sources", [])
+              if source.get("id") not in replace_ids
+          ]
+          feed_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+          print("Pruned replace-existing sources:", ", ".join(sorted(replace_ids)))
+          PY
+
       - name: Crawl and upload feed
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
