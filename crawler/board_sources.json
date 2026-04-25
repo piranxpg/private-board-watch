@@ -136,6 +136,13 @@
       "pages": 3,
       "match_all": true,
       "max_items_per_source": 36,
+      "blocked_urls": [
+        "https://www.bobaedream.co.kr/view?code=nsfw&No=7548",
+        "https://www.bobaedream.co.kr/view?code=nsfw&No=7519",
+        "https://www.bobaedream.co.kr/view?code=nsfw&No=7545",
+        "https://www.bobaedream.co.kr/view?code=nsfw&No=7544",
+        "https://www.bobaedream.co.kr/view?code=nsfw&No=7550"
+      ],
       "link_allow": ["/view?code=nsfw"]
     },
     {
