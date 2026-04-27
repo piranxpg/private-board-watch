@@ -74,7 +74,7 @@ async function loadFeed(forceRefresh = false) {
     }
 
     const payload = await response.json();
-    state.allItems = Array.isArray(payload.items) ? payload.items : [];
+    state.allItems = sortItems(Array.isArray(payload.items) ? payload.items : []);
     state.sources = Array.isArray(payload.sources) ? payload.sources : [];
     state.error = payload.message || "";
   } catch (error) {
@@ -97,7 +97,7 @@ function render() {
       !state.query ||
       [item.title, item.sourceName].some((value) => String(value || "").toLowerCase().includes(state.query));
     return sourceOk && queryOk;
-  });
+  }).sort(compareItemsNewestFirst);
 
   const failedSources = state.sources.filter((source) => source.error);
   const loadedSources = state.sources.filter((source) => !source.error && source.enabled !== false);
@@ -200,6 +200,20 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function sortItems(items) {
+  return [...items].sort(compareItemsNewestFirst);
+}
+
+function compareItemsNewestFirst(left, right) {
+  return dateScore(right) - dateScore(left);
+}
+
+function dateScore(item) {
+  const value = item?.publishedAt || item?.collectedAt || "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
 function escapeHtml(value) {
