@@ -154,7 +154,7 @@ function renderTabs() {
     button.type = "button";
     button.className = "tab";
     button.setAttribute("aria-pressed", String(state.activeSource === tab.id));
-    button.innerHTML = `${escapeHtml(tab.name)} <span class="count">${tab.count}</span>`;
+    button.innerHTML = `<span class="tab-label">${escapeHtml(tab.name)}</span><span class="count">${tab.count}</span>`;
     button.addEventListener("click", () => {
       state.activeSource = tab.id;
       render();
