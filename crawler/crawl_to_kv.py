@@ -48,6 +48,11 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0 Safari/537.36"
 )
+SECURITY_PAGE_MARKERS = (
+    "에펨코리아 보안 시스템",
+    "ddosCheckOnly",
+    "/mc/mc.php",
+)
 
 
 @dataclass
@@ -78,7 +83,7 @@ def load_existing_payload(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception as exc:
         log(f"warning: ignored existing payload: {exc}")
         return {}
@@ -135,11 +140,16 @@ def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
         try:
             response = session.get(url, timeout=timeout)
             response.raise_for_status()
-            if not response.encoding or response.encoding.lower() == "iso-8859-1":
-                response.encoding = response.apparent_encoding or "utf-8"
-            return response.text
+            text = decode_response_text(response)
+            if any(marker in text for marker in SECURITY_PAGE_MARKERS):
+                raise RuntimeError("site security verification required")
+            return text
         except requests.HTTPError as exc:
             status_code = exc.response.status_code if exc.response is not None else 0
+            if status_code in {429, 430} and exc.response is not None:
+                body = decode_response_text(exc.response)
+                if any(marker in body for marker in SECURITY_PAGE_MARKERS):
+                    raise RuntimeError(f"site security verification required (HTTP {status_code})") from exc
             if status_code < 500 or attempt == 2:
                 raise
             last_error = exc
@@ -153,6 +163,22 @@ def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
     if last_error:
         raise last_error
     raise RuntimeError(f"failed to fetch {url}")
+
+
+def decode_response_text(response: requests.Response) -> str:
+    content_type = response.headers.get("content-type", "").lower()
+    has_charset = "charset=" in content_type
+
+    if has_charset:
+        return response.text
+
+    if not response.encoding or response.encoding.lower() == "iso-8859-1":
+        try:
+            return response.content.decode("utf-8")
+        except UnicodeDecodeError:
+            response.encoding = response.apparent_encoding or "utf-8"
+
+    return response.text
 
 
 def with_query_param(url: str, key: str, value: str) -> str:
@@ -236,6 +262,12 @@ def source_list_urls(source: dict[str, Any], default_keywords: list[str] | None 
 def canonical_url(url: str, source: dict[str, Any] | None = None) -> str:
     parsed = urlparse(url)
     query = parse_qs(parsed.query, keep_blank_values=True)
+    if source and source.get("id") == "fmkorea-humor":
+        short_link_match = re.fullmatch(r"/(\d{5,})/?", parsed.path)
+        if short_link_match and "document_srl" not in query:
+            query["document_srl"] = [short_link_match.group(1)]
+            parsed = parsed._replace(path="/index.php")
+
     keep_keys = {"id", "no", "num", "document_srl", "wr_id", "idx", "code", "bo_table", "table", "b", "nid"}
     if source:
         keep_keys.update(str(key).lower() for key in source.get("canonical_keep_keys", []))
@@ -253,6 +285,10 @@ def source_blocked_urls(source: dict[str, Any]) -> set[str]:
         canonical_url(urljoin(source["url"], str(url)), source)
         for url in source.get("blocked_urls", [])
     }
+
+
+def source_blocked_url_regexes(source: dict[str, Any]) -> list[str]:
+    return list(source.get("blocked_url_regex", []))
 
 
 def is_allowed_link(url: str, source: dict[str, Any]) -> bool:
@@ -287,6 +323,7 @@ def discover_candidates(
     active_keywords = source_keywords(source, keywords)
     active_blocked_keywords = source_blocked_keywords(source, blocked_keywords)
     active_blocked_urls = source_blocked_urls(source)
+    active_blocked_url_regexes = source_blocked_url_regexes(source)
 
     for index, list_url in enumerate(source_list_urls(source, keywords)):
         if index:
@@ -316,11 +353,13 @@ def discover_candidates(
             key = canonical_url(url, source)
             if key in active_blocked_urls:
                 continue
+            if any(re.search(pattern, key) for pattern in active_blocked_url_regexes):
+                continue
             if key in seen:
                 continue
             seen.add(key)
             candidate = {"title": title, "url": url}
-            published_at = extract_candidate_published_at(anchor)
+            published_at = extract_candidate_published_at(anchor, url)
             if published_at:
                 candidate["publishedAt"] = published_at
             candidates.append(candidate)
@@ -407,28 +446,116 @@ def parse_published_at(soup: BeautifulSoup) -> str:
         iso = normalize_date(value)
         if iso:
             return iso
+
+    text_selectors = [
+        ".writerInfoContents",
+        ".writerInfoContainer",
+        ".writerInfo03",
+        ".countGroup",
+        ".topTitle-box",
+        "#topTitle",
+        ".viewTitleDiv",
+        ".view_info",
+        ".article_info",
+        ".post_info",
+        ".regdate",
+        ".user_view .regdate",
+        '[class*="writerInfo"]',
+        '[id*="writerInfo"]',
+    ]
+    for selector in text_selectors:
+        for tag in soup.select(selector):
+            iso = extract_date_from_text(tag.get_text(" ", strip=True))
+            if iso:
+                return iso
     return ""
 
 
-def extract_candidate_published_at(anchor: Any) -> str:
+def extract_date_from_text(value: str) -> str:
+    text = display_text(value)
+    if not text:
+        return ""
+    for pattern in (
+        r"(\d{4})[-./](\d{1,2})[-./](\d{1,2})\D{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?",
+        r"(\d{2})[-./](\d{1,2})[-./](\d{1,2})\D{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?",
+    ):
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        year, month, day, hour, minute, second = match.groups()
+        year_value = int(year)
+        if year_value < 100:
+            year_value += 2000
+        return datetime(
+            year_value,
+            int(month),
+            int(day),
+            int(hour),
+            int(minute),
+            int(second or 0),
+            tzinfo=KST,
+        ).isoformat()
+    for pattern in (
+        r"\d{4}[-./]\d{1,2}[-./]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?",
+        r"\d{4}/\d{1,2}/\d{1,2}\s+(?:AM|PM)\s+\d{1,2}:\d{2}",
+        r"\d{2}[-./]\d{1,2}[-./]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?",
+        r"\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}",
+    ):
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        normalized = normalize_date(match.group(0))
+        if normalized:
+            return normalized
+    return ""
+
+
+def extract_candidate_published_at(anchor: Any, url: str = "") -> str:
     parent = anchor
     for _ in range(5):
         parent = getattr(parent, "parent", None)
         if not parent:
             break
-        text = display_text(parent.get_text(" ", strip=True))
-        for pattern in (
-            r"\d{4}[-./]\d{2}[-./]\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?",
-            r"\d{4}/\d{2}/\d{2}\s+(?:AM|PM)\s+\d{1,2}:\d{2}",
-            r"\d{2}-\d{2}\s+\d{1,2}:\d{2}",
-        ):
-            match = re.search(pattern, text, flags=re.IGNORECASE)
-            if not match:
-                continue
-            normalized = normalize_date(match.group(0))
-            if normalized:
-                return normalized
-    return ""
+        text = parent.get_text(" ", strip=True)
+        normalized = extract_date_from_text(text) or infer_date_from_url(url, text, allow_date_only=False)
+        if normalized:
+            return normalized
+    return infer_date_from_url(url)
+
+
+def infer_date_from_url(url: str, context_text: str = "", allow_date_only: bool = True) -> str:
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    candidates = [*query.get("id", []), *query.get("no", []), parsed.path]
+    date_match = None
+    for candidate in candidates:
+        date_match = re.search(r"(20\d{2})(\d{2})(\d{2})", str(candidate))
+        if date_match:
+            break
+    if not date_match:
+        return ""
+
+    year, month, day = (int(part) for part in date_match.groups())
+    hour = minute = second = 0
+    time_matches = []
+    for match in re.finditer(r"\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b", display_text(context_text)):
+        candidate_hour = int(match.group(1))
+        candidate_minute = int(match.group(2))
+        candidate_second = int(match.group(3) or 0)
+        if candidate_hour <= 23 and candidate_minute <= 59 and candidate_second <= 59:
+            time_matches.append(match)
+    if time_matches:
+        time_match = time_matches[-1]
+        hour, minute, second = (
+            int(time_match.group(1)),
+            int(time_match.group(2)),
+            int(time_match.group(3) or 0),
+        )
+    elif not allow_date_only:
+        return ""
+    return datetime(year, month, day, hour, minute, second, tzinfo=KST).isoformat()
 
 
 def is_recent(value: str, hours: int) -> bool:
@@ -474,6 +601,12 @@ def normalize_date(value: str) -> str:
         "%Y.%m.%d %H:%M",
         "%Y-%m-%d %H:%M",
         "%Y/%m/%d %H:%M",
+        "%y-%m-%d %H:%M:%S",
+        "%y/%m/%d %H:%M:%S",
+        "%y.%m.%d %H:%M:%S",
+        "%y.%m.%d %H:%M",
+        "%y-%m-%d %H:%M",
+        "%y/%m/%d %H:%M",
         "%m-%d %H:%M",
     ):
         try:
@@ -518,6 +651,7 @@ def crawl_source(
             detail_html = fetch_text(session, candidate["url"], settings.detail_timeout)
             soup = BeautifulSoup(detail_html, "html.parser")
             published_at = candidate.get("publishedAt") or parse_published_at(soup)
+            date_source = "parsed" if published_at else "collected"
             if not published_at:
                 published_at = (crawl_started - timedelta(seconds=position)).isoformat()
             if not is_recent(published_at, settings.hours):
@@ -539,6 +673,8 @@ def crawl_source(
                     "link": link,
                     "imageUrl": image_url,
                     "publishedAt": published_at,
+                    "collectedAt": crawl_started.isoformat(),
+                    "dateSource": date_source,
                 }
             )
         except Exception as exc:
@@ -557,12 +693,14 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
     source_summaries: list[dict[str, Any]] = []
     replace_source_ids: list[str] = []
     blocked_urls: list[str] = []
+    blocked_url_regexes: list[str] = []
 
     for source in sorted(sources, key=lambda item: item.get("rank", 999)):
         log(f"crawl: {source.get('name', source['id'])}")
         items, error = crawl_source(session, source, keywords, blocked_keywords, settings)
         all_items.extend(items)
         blocked_urls.extend(source_blocked_urls(source))
+        blocked_url_regexes.extend(source_blocked_url_regexes(source))
         if source.get("replace_existing"):
             replace_source_ids.append(source["id"])
         summary = {
@@ -579,7 +717,7 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
         time.sleep(settings.sleep_seconds)
 
     all_items = dedupe_items(all_items)
-    all_items.sort(key=lambda item: item.get("publishedAt") or "", reverse=True)
+    sort_items_newest_first(all_items)
 
     return {
         "generatedAt": datetime.now(KST).isoformat(),
@@ -587,6 +725,7 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
         "items": all_items,
         "_replaceSourceIds": replace_source_ids,
         "_blockedUrls": blocked_urls,
+        "_blockedUrlRegexes": blocked_url_regexes,
     }
 
 
@@ -606,6 +745,16 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
         for url in new_payload.get("_blockedUrls", [])
         if isinstance(url, str)
     }
+    blocked_url_regexes = [
+        pattern
+        for pattern in new_payload.get("_blockedUrlRegexes", [])
+        if isinstance(pattern, str)
+    ]
+
+    def is_blocked_item(item: dict[str, Any]) -> bool:
+        link = item.get("link") or ""
+        return link in blocked_urls or any(re.search(pattern, link) for pattern in blocked_url_regexes)
+
     existing_items = existing_payload.get("items") if isinstance(existing_payload.get("items"), list) else []
     if active_source_ids:
         existing_items = [
@@ -617,16 +766,16 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
     existing_items = [
         item
         for item in existing_items
-        if not isinstance(item, dict) or item.get("link") not in blocked_urls
+        if not isinstance(item, dict) or not is_blocked_item(item)
     ]
     new_items = new_payload.get("items") if isinstance(new_payload.get("items"), list) else []
     new_items = [
         item
         for item in new_items
-        if not isinstance(item, dict) or item.get("link") not in blocked_urls
+        if not isinstance(item, dict) or not is_blocked_item(item)
     ]
-    items = dedupe_items([*new_items, *existing_items])
-    items.sort(key=lambda item: item.get("publishedAt") or "", reverse=True)
+    items = merge_new_and_existing_items(new_items, existing_items)
+    sort_items_newest_first(items)
     items = items[: settings.max_total_items]
 
     existing_sources = existing_payload.get("sources") if isinstance(existing_payload.get("sources"), list) else []
@@ -653,6 +802,7 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
     }
     payload.pop("_replaceSourceIds", None)
     payload.pop("_blockedUrls", None)
+    payload.pop("_blockedUrlRegexes", None)
     return payload
 
 
@@ -679,6 +829,51 @@ def merge_source_summaries(
     return merged
 
 
+def item_identity(item: dict[str, Any]) -> str:
+    return item.get("link") or item.get("imageUrl") or ""
+
+
+def merge_new_and_existing_items(
+    new_items: list[dict[str, Any]],
+    existing_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    existing_by_key = {
+        item_identity(item): item
+        for item in existing_items
+        if isinstance(item, dict) and item_identity(item)
+    }
+    seen: set[str] = set()
+    result: list[dict[str, Any]] = []
+
+    for item in new_items:
+        if not isinstance(item, dict):
+            continue
+
+        key = item_identity(item)
+        if not key or key in seen:
+            continue
+
+        existing_item = existing_by_key.get(key)
+        if existing_item and item.get("dateSource") == "collected":
+            result.append(existing_item)
+        else:
+            result.append(item)
+        seen.add(key)
+
+    for item in existing_items:
+        if not isinstance(item, dict):
+            continue
+
+        key = item_identity(item)
+        if not key or key in seen:
+            continue
+
+        result.append(item)
+        seen.add(key)
+
+    return result
+
+
 def dedupe_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     result: list[dict[str, Any]] = []
@@ -689,6 +884,16 @@ def dedupe_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         result.append(item)
     return result
+
+
+def sort_items_newest_first(items: list[dict[str, Any]]) -> None:
+    items.sort(
+        key=lambda item: (
+            item.get("publishedAt") or item.get("collectedAt") or "",
+            item.get("collectedAt") or "",
+        ),
+        reverse=True,
+    )
 
 
 def upload_to_kv(payload: dict[str, Any], key: str) -> None:
