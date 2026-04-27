@@ -97,7 +97,7 @@ export async function onRequestGet(context) {
     generatedAt: new Date().toISOString(),
     sources: sourceResults,
     items: dedupeItems(items)
-      .sort((left, right) => dateScore(right.publishedAt) - dateScore(left.publishedAt))
+      .sort(compareItemsNewestFirst)
       .slice(0, limit),
   };
 
@@ -153,7 +153,7 @@ async function readKvPayload(context, selectedSource, limit) {
   const payload = JSON.parse(raw);
   const items = asArray(payload.items)
     .filter((item) => selectedSource === "all" || item.sourceId === selectedSource)
-    .sort((left, right) => dateScore(right.publishedAt) - dateScore(left.publishedAt))
+    .sort(compareItemsNewestFirst)
     .slice(0, limit);
   const sources = asArray(payload.sources).length ? asArray(payload.sources) : summarizeSourcesFromItems(payload.items);
 
@@ -292,6 +292,7 @@ function normalizeItem(item, source, config) {
     link,
     imageUrl,
     publishedAt: normalizeDate(item.publishedAt),
+    collectedAt: new Date().toISOString(),
   };
 }
 
@@ -405,6 +406,14 @@ function dedupeItems(items) {
     seen.add(key);
     return true;
   });
+}
+
+function compareItemsNewestFirst(left, right) {
+  return itemDateScore(right) - itemDateScore(left);
+}
+
+function itemDateScore(item) {
+  return dateScore(item?.publishedAt || item?.collectedAt);
 }
 
 function textValue(value) {
