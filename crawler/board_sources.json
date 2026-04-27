@@ -67,6 +67,18 @@
       "link_allow_regex": ["mypi\\.htm\\?nid=\\d+&num=\\d+"]
     },
     {
+      "id": "ruliweb-mypi-244274-68",
+      "name": "루리웹 마이피 244274 카테고리",
+      "rank": 2.5,
+      "enabled": false,
+      "url": "https://mypi.ruliweb.com/mypi.htm?nid=244274&ncate=68",
+      "pages": 3,
+      "match_all": true,
+      "allow_missing_image": true,
+      "max_items_per_source": 36,
+      "link_allow_regex": ["mypi\\.htm\\?(?=.*\\bnid=244274\\b)(?=.*\\bnum=\\d+\\b)"]
+    },
+    {
       "id": "clien-free",
       "name": "클리앙 자유게시판",
       "rank": 3,
@@ -116,9 +128,14 @@
       "id": "fmkorea-humor",
       "name": "에펨코리아 유머게시판",
       "rank": 7,
+      "enabled": false,
+      "disabled_reason": "HTTP 430 보안 검증 페이지가 내려와서 자동 수집 보류",
       "url": "https://www.fmkorea.com/index.php?mid=humor&category=3331461695",
       "pages": 3,
-      "link_allow_regex": ["^/index\\.php\\?mid=humor&category=3331461695&document_srl=\\d+"]
+      "link_allow_regex": [
+        "^/index\\.php\\?(?:[^&]+&)*document_srl=\\d+",
+        "^/\\d{5,}\\??"
+      ]
     },
     {
       "id": "bobaedream-free",
@@ -161,6 +178,7 @@
       "pages": 3,
       "match_all": true,
       "max_items_per_source": 36,
+      "blocked_url_regex": ["^https://www\\.etoland\\.co\\.kr/bbs/board\\.php\\?bo_table=etohumor07&wr_id=\\d+$"],
       "link_allow_regex": ["hgall\\.php\\?bo_table=etohumor07&wr_id=\\d+&sca=%BE%E0%C8%C4"]
     },
     {
