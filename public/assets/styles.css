@@ -164,14 +164,22 @@ main {
   gap: 8px;
   flex: 1 1 160px;
   max-width: 240px;
-  min-height: 36px;
+  min-width: 0;
+  height: 38px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--muted);
   background: var(--surface);
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
+  overflow: hidden;
+}
+
+.tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab[aria-pressed="true"] {
@@ -183,6 +191,7 @@ main {
 .count {
   color: var(--amber);
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 
 .status {
