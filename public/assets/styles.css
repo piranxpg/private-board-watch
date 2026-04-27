@@ -151,23 +151,27 @@ main {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
+  overflow: visible;
   padding: 2px 0 16px;
-  scrollbar-width: thin;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  flex: 1 1 160px;
+  max-width: 240px;
   min-height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--muted);
   background: var(--surface);
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 
 .tab[aria-pressed="true"] {
@@ -341,5 +345,10 @@ main {
 
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .tab {
+    flex-basis: calc(50% - 4px);
+    max-width: none;
   }
 }
