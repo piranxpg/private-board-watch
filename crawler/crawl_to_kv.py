@@ -387,6 +387,8 @@ def find_image_url(soup: BeautifulSoup, page_url: str) -> str:
         ".read_body img",
         ".board-read img",
         ".article img",
+        ".articleContent img",
+        ".contentBody img",
         ".post img",
         ".contents img",
         ".content img",
@@ -457,6 +459,7 @@ def parse_published_at(soup: BeautifulSoup) -> str:
         ".viewTitleDiv",
         ".view_info",
         ".article_info",
+        ".articleDate",
         ".post_info",
         ".regdate",
         ".user_view .regdate",
@@ -594,6 +597,12 @@ def normalize_date(value: str) -> str:
             int(minute),
             tzinfo=KST,
         ).isoformat()
+
+    month_day_match = re.fullmatch(r"(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})", value)
+    if month_day_match:
+        month, day, hour, minute = (int(part) for part in month_day_match.groups())
+        return datetime(datetime.now(KST).year, month, day, hour, minute, tzinfo=KST).isoformat()
+
     for pattern in (
         "%Y-%m-%d %H:%M:%S",
         "%Y/%m/%d %H:%M:%S",
@@ -607,12 +616,9 @@ def normalize_date(value: str) -> str:
         "%y.%m.%d %H:%M",
         "%y-%m-%d %H:%M",
         "%y/%m/%d %H:%M",
-        "%m-%d %H:%M",
     ):
         try:
             parsed = datetime.strptime(value, pattern)
-            if pattern.startswith("%m"):
-                parsed = parsed.replace(year=datetime.now(KST).year)
             return parsed.replace(tzinfo=KST).isoformat()
         except ValueError:
             continue
