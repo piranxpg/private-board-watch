@@ -144,8 +144,10 @@
       "url": "https://www.inven.co.kr/board/webzine/2097?iskin=webzine",
       "pages": 3,
       "page_param": "p",
+      "search_url_template": "https://www.inven.co.kr/board/webzine/2097?iskin=webzine&name=subject&keyword={keyword}",
+      "search_pages": 2,
       "allow_missing_image": true,
-      "link_allow_regex": ["^/board/webzine/2097/\\d+\\?iskin=webzine"]
+      "link_allow_regex": ["^/board/webzine/2097/\\d+(?:\\?|$)"]
     },
     {
       "id": "bobaedream-free",
