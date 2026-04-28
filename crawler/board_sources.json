@@ -138,6 +138,16 @@
       ]
     },
     {
+      "id": "inven-openissue",
+      "name": "인벤 오픈이슈갤러리",
+      "rank": 7.5,
+      "url": "https://www.inven.co.kr/board/webzine/2097?iskin=webzine",
+      "pages": 3,
+      "page_param": "p",
+      "allow_missing_image": true,
+      "link_allow_regex": ["^/board/webzine/2097/\\d+\\?iskin=webzine"]
+    },
+    {
       "id": "bobaedream-free",
       "name": "보배드림 자유게시판",
       "rank": 8,
@@ -174,12 +184,26 @@
       "id": "etoland-humor",
       "name": "이토랜드 약후",
       "rank": 11,
+      "enabled": false,
+      "disabled_reason": "GitHub Actions 자동 수집 환경에서 HTTP 403으로 차단되어 보류",
       "url": "https://www.etoland.co.kr/bbs/hgall.php?bo_table=etohumor07&sca=%BE%E0%C8%C4",
       "pages": 3,
       "match_all": true,
       "max_items_per_source": 36,
       "blocked_url_regex": ["^https://www\\.etoland\\.co\\.kr/bbs/board\\.php\\?bo_table=etohumor07&wr_id=\\d+$"],
       "link_allow_regex": ["hgall\\.php\\?bo_table=etohumor07&wr_id=\\d+&sca=%BE%E0%C8%C4"]
+    },
+    {
+      "id": "fomos-yajjal",
+      "name": "포모스 야짤갤러리",
+      "rank": 11.5,
+      "url": "https://www.fomos.kr/talk/article_list?bbs_id=5",
+      "pages": 3,
+      "page_param": "page",
+      "match_all": true,
+      "max_items_per_source": 36,
+      "canonical_keep_keys": ["bbs_id", "indexno"],
+      "link_allow_regex": ["^/talk/article_view\\?(?=.*\\bbbs_id=5\\b)(?=.*\\bindexno=\\d+\\b)"]
     },
     {
       "id": "slrclub-free",
