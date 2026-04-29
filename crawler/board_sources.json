@@ -62,7 +62,7 @@
       "name": "루리웹 마이피",
       "rank": 2,
       "url": "https://mypi.ruliweb.com/mypi_timeline.htm",
-      "pages": 6,
+      "pages": 3,
       "hours": 24,
       "request_timeout": 8,
       "sleep_seconds": 0.2,
@@ -73,7 +73,7 @@
       "trust_search_results": true,
       "allow_missing_image": true,
       "skip_detail": true,
-      "max_items_per_source": 36,
+      "max_items_per_source": 18,
       "link_allow_regex": ["mypi\\.htm\\?(?=.*\\bnid=\\d+\\b)(?=.*\\bnum=\\d+\\b)"]
     },
     {
