@@ -161,6 +161,27 @@
       "link_allow_regex": ["^/board/webzine/2097/\\d+(?:\\?|$)"]
     },
     {
+      "id": "soccerline-locker",
+      "name": "싸커라인 라커룸게시판",
+      "rank": 7.8,
+      "url": "https://soccerline.kr/board?categoryDepth01=5",
+      "parser": "soccerline",
+      "pages": 1,
+      "hours": 48,
+      "request_timeout": 8,
+      "sleep_seconds": 0.15,
+      "search_url_template": "https://soccerline.kr/board?categoryDepth01=5&page=0&searchText={keyword}&searchType=0&searchWindow=",
+      "search_keywords": ["후방", "ㅇㅎ", "ㅎㅂ", "약후", "비키니", "몸매", "눈나", "호불호", "불호", "처자"],
+      "search_pages": 1,
+      "search_page_start": 0,
+      "trust_search_results": true,
+      "skip_detail": true,
+      "allow_missing_image": true,
+      "max_items_per_source": 36,
+      "canonical_keep_keys": ["categoryDepth01"],
+      "link_allow_regex": ["^/board/\\d+\\?categoryDepth01=5"]
+    },
+    {
       "id": "bobaedream-free",
       "name": "보배드림 자유게시판",
       "rank": 8,
