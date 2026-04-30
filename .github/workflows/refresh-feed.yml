@@ -165,3 +165,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           KV_KEY: feed:latest
         run: python crawler/soccerline_to_kv.py --feed crawler/feed.latest.json --config crawler/board_sources.json
+
+      - name: Merge Dogdrip feed
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          KV_KEY: feed:latest
+        run: python crawler/dogdrip_to_kv.py --feed crawler/feed.latest.json --config crawler/board_sources.json
