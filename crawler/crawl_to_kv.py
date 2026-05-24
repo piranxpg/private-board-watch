@@ -532,6 +532,17 @@ def infer_date_from_url(url: str, context_text: str = "", allow_date_only: bool 
     parsed = urlparse(url)
     query = parse_qs(parsed.query)
     candidates = [*query.get("id", []), *query.get("no", []), parsed.path]
+
+    for candidate in candidates:
+        compact_match = re.search(r"(20\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})", str(candidate))
+        if not compact_match:
+            continue
+        year, month, day, hour, minute, second = (int(part) for part in compact_match.groups())
+        try:
+            return datetime(year, month, day, hour, minute, second, tzinfo=KST).isoformat()
+        except ValueError:
+            continue
+
     date_match = None
     for candidate in candidates:
         date_match = re.search(r"(20\d{2})(\d{2})(\d{2})", str(candidate))
@@ -561,16 +572,45 @@ def infer_date_from_url(url: str, context_text: str = "", allow_date_only: bool 
     return datetime(year, month, day, hour, minute, second, tzinfo=KST).isoformat()
 
 
-def is_recent(value: str, hours: int) -> bool:
+def parse_iso_datetime(value: str) -> datetime | None:
     if not value:
-        return True
+        return None
     try:
-        published = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=KST)
+    return parsed.astimezone(KST)
+
+
+def is_future_date(value: str, reference: datetime | None = None, tolerance: timedelta = timedelta(hours=6)) -> bool:
+    parsed = parse_iso_datetime(value)
+    if not parsed:
+        return False
+    return parsed > (reference or datetime.now(KST)) + tolerance
+
+
+def repair_future_item_date(item: dict[str, Any]) -> dict[str, Any]:
+    if not is_future_date(str(item.get("publishedAt") or "")):
+        return item
+
+    repaired = dict(item)
+    fallback = infer_date_from_url(str(repaired.get("imageUrl") or ""))
+    if not fallback or is_future_date(fallback):
+        fallback = str(repaired.get("collectedAt") or "")
+
+    if fallback and not is_future_date(fallback):
+        repaired["publishedAt"] = fallback
+        repaired["dateSource"] = "repaired"
+    return repaired
+
+
+def is_recent(value: str, hours: int) -> bool:
+    published = parse_iso_datetime(value)
+    if not published:
         return True
-    if published.tzinfo is None:
-        published = published.replace(tzinfo=KST)
-    return published.astimezone(KST) >= datetime.now(KST) - timedelta(hours=hours)
+    return published >= datetime.now(KST) - timedelta(hours=hours)
 
 
 def normalize_date(value: str) -> str:
@@ -652,11 +692,18 @@ def crawl_source(
         if len(items) >= item_limit:
             break
 
+        candidate_published_at = candidate.get("publishedAt")
+        if candidate_published_at and is_future_date(candidate_published_at, crawl_started):
+            candidate_published_at = ""
+
         time.sleep(settings.sleep_seconds)
         try:
             detail_html = fetch_text(session, candidate["url"], settings.detail_timeout)
             soup = BeautifulSoup(detail_html, "html.parser")
-            published_at = candidate.get("publishedAt") or parse_published_at(soup)
+            detail_published_at = parse_published_at(soup)
+            published_at = candidate_published_at or detail_published_at
+            if published_at and is_future_date(published_at, crawl_started):
+                published_at = detail_published_at if detail_published_at != published_at else ""
             date_source = "parsed" if published_at else "collected"
             if not published_at:
                 published_at = (crawl_started - timedelta(seconds=position)).isoformat()
@@ -774,11 +821,19 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
         for item in existing_items
         if not isinstance(item, dict) or not is_blocked_item(item)
     ]
+    existing_items = [
+        repair_future_item_date(item) if isinstance(item, dict) else item
+        for item in existing_items
+    ]
     new_items = new_payload.get("items") if isinstance(new_payload.get("items"), list) else []
     new_items = [
         item
         for item in new_items
         if not isinstance(item, dict) or not is_blocked_item(item)
+    ]
+    new_items = [
+        repair_future_item_date(item) if isinstance(item, dict) else item
+        for item in new_items
     ]
     items = merge_new_and_existing_items(new_items, existing_items)
     sort_items_newest_first(items)
