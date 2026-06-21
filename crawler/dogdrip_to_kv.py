@@ -91,8 +91,89 @@ def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
         return response.text
 
 
-def parse_relative_date(value: str) -> str:
+def parse_iso_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=KST)
+    return parsed.astimezone(KST)
+
+
+def is_future_date(value: str, reference: datetime | None = None) -> bool:
+    parsed = parse_iso_datetime(value)
+    if not parsed:
+        return False
+    reference = reference or datetime.now(KST)
+    return parsed > reference + timedelta(hours=6)
+
+
+def parse_absolute_date(value: str, reference: datetime | None = None) -> str:
     value = clean_text(value)
+    reference = reference or datetime.now(KST)
+
+    match = re.search(
+        r"(20\d{2})[-./](\d{1,2})[-./](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        value,
+    )
+    if match:
+        year, month, day = (int(part) for part in match.groups()[:3])
+        hour = int(match.group(4) or 0)
+        minute = int(match.group(5) or 0)
+        second = int(match.group(6) or 0)
+        try:
+            candidate = datetime(year, month, day, hour, minute, second, tzinfo=KST)
+        except ValueError:
+            return ""
+        return "" if candidate > reference + timedelta(hours=6) else candidate.isoformat()
+
+    match = re.search(r"(\d{1,2})[-.](\d{1,2})\s+(\d{1,2}):(\d{2})", value)
+    if match:
+        month, day, hour, minute = (int(part) for part in match.groups())
+        try:
+            candidate = datetime(reference.year, month, day, hour, minute, tzinfo=KST)
+        except ValueError:
+            return ""
+        if candidate > reference + timedelta(hours=6):
+            candidate = candidate.replace(year=candidate.year - 1)
+        return candidate.isoformat()
+
+    return ""
+
+
+def parse_detail_date(session: requests.Session, link: str, timeout: int, reference: datetime) -> str:
+    try:
+        soup = BeautifulSoup(fetch_text(session, link, timeout), "html.parser")
+    except Exception:
+        return ""
+
+    for selector in (
+        "time[datetime]",
+        "meta[property='article:published_time']",
+        "meta[name='article:published_time']",
+    ):
+        node = soup.select_one(selector)
+        if not node:
+            continue
+        value = node.get("datetime") or node.get("content") or ""
+        parsed = parse_iso_datetime(value)
+        if parsed and parsed <= reference + timedelta(hours=6):
+            return parsed.isoformat()
+
+    # Dogdrip detail pages expose post dates as YYYY.MM.DD without a time.
+    for node in soup.select("span.ed.text-xsmall.text-muted, span.ed.text-muted"):
+        published_at = parse_absolute_date(node.get_text(" ", strip=True), reference)
+        if published_at:
+            return published_at
+    return parse_absolute_date(soup.get_text(" ", strip=True), reference)
+
+
+def parse_relative_date(value: str, reference: datetime | None = None) -> str:
+    value = clean_text(value)
+    reference = reference or datetime.now(KST)
     patterns = (
         (r"방금\s*전", timedelta(seconds=0)),
         (r"(\d+)\s*초\s*전", "seconds"),
@@ -105,16 +186,9 @@ def parse_relative_date(value: str) -> str:
         if not match:
             continue
         delta = unit if isinstance(unit, timedelta) else timedelta(**{unit: int(match.group(1))})
-        return (datetime.now(KST) - delta).isoformat()
+        return (reference - delta).isoformat()
 
-    match = re.search(r"(\d{1,2})[-.](\d{1,2})\s+(\d{1,2}):(\d{2})", value)
-    if match:
-        month, day, hour, minute = (int(part) for part in match.groups())
-        try:
-            return datetime(datetime.now(KST).year, month, day, hour, minute, tzinfo=KST).isoformat()
-        except ValueError:
-            return ""
-    return ""
+    return parse_absolute_date(value, reference)
 
 
 def source_urls(source: DogdripSource, keywords: list[str]) -> list[tuple[str, bool]]:
@@ -140,7 +214,8 @@ def collect_source(
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
     errors: list[str] = []
-    now = datetime.now(KST).isoformat()
+    crawl_started = datetime.now(KST)
+    now = crawl_started.isoformat()
 
     for url, trusted_search in source_urls(source, keywords):
         try:
@@ -163,7 +238,11 @@ def collect_source(
                 continue
 
             row = anchor.find_parent("li")
-            published_at = parse_relative_date(row.get_text(" ", strip=True) if row else "")
+            published_at = parse_relative_date(row.get_text(" ", strip=True) if row else "", crawl_started)
+            if (not published_at or is_future_date(published_at, crawl_started)) and trusted_search:
+                published_at = parse_detail_date(session, link, timeout, crawl_started)
+            if trusted_search and not published_at:
+                continue
             image_url = ""
             image = row.select_one("img.webzine-thumbnail") if row else None
             if image:
