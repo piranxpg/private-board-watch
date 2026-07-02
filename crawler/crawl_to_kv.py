@@ -205,6 +205,8 @@ def with_query_param(url: str, key: str, value: str) -> str:
 
 
 def expand_pages(url: str, page_count: int, page_param: str, page_start: int) -> list[str]:
+    if page_count <= 0:
+        return []
     urls = [url]
     for page_number in range(page_start + 1, page_start + page_count):
         urls.append(with_query_param(url, page_param, str(page_number)))
@@ -248,7 +250,8 @@ def source_list_urls(source: dict[str, Any], default_keywords: list[str] | None 
     if explicit_urls:
         list_urls = [urljoin(source["url"], url) for url in explicit_urls]
     else:
-        page_count = max(1, int(source.get("pages", 1) or 1))
+        page_count_value = source.get("pages", 1)
+        page_count = max(0, int(1 if page_count_value is None else page_count_value))
         page_param = str(source.get("page_param", "page"))
         page_start = int(source.get("page_start", 1) or 1)
         list_urls = expand_pages(source["url"], page_count, page_param, page_start)
