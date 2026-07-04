@@ -117,6 +117,33 @@ def source_item_limit(source: dict[str, Any], settings: CrawlSettings) -> int:
     return max(1, int(value or settings.max_items_per_source))
 
 
+def source_hours(source: dict[str, Any], settings: CrawlSettings) -> int:
+    value = source.get("hours", settings.hours)
+    return max(1, int(value or settings.hours))
+
+
+def source_request_timeout(source: dict[str, Any], settings: CrawlSettings) -> int:
+    value = source.get("request_timeout", settings.request_timeout)
+    return max(1, int(value or settings.request_timeout))
+
+
+def source_detail_timeout(source: dict[str, Any], settings: CrawlSettings) -> int:
+    value = source.get("detail_timeout", settings.detail_timeout)
+    return max(1, int(value or settings.detail_timeout))
+
+
+def source_sleep_seconds(source: dict[str, Any], settings: CrawlSettings) -> float:
+    value = source.get("sleep_seconds", settings.sleep_seconds)
+    return max(0.0, float(value or settings.sleep_seconds))
+
+
+def source_max_seconds(source: dict[str, Any]) -> float | None:
+    value = source.get("max_seconds")
+    if value is None or value == "":
+        return None
+    return max(1.0, float(value))
+
+
 def has_blocked_keyword(value: str, blocked_keywords: list[str]) -> bool:
     clean = normalize_text(value)
     return any(normalize_text(keyword) in clean for keyword in blocked_keywords)
@@ -327,13 +354,24 @@ def discover_candidates(
     active_blocked_keywords = source_blocked_keywords(source, blocked_keywords)
     active_blocked_urls = source_blocked_urls(source)
     active_blocked_url_regexes = source_blocked_url_regexes(source)
+    request_timeout = source_request_timeout(source, settings)
+    sleep_seconds = source_sleep_seconds(source, settings)
+    max_seconds = source_max_seconds(source)
+    started_at = time.monotonic()
+    trusted_search_urls = (
+        set(source_search_urls(source, keywords)) if source.get("trust_search_results") else set()
+    )
 
     for index, list_url in enumerate(source_list_urls(source, keywords)):
-        if index:
-            time.sleep(settings.sleep_seconds)
+        if max_seconds is not None and time.monotonic() - started_at >= max_seconds:
+            errors.append(f"source time limit exceeded after {max_seconds:.0f}s")
+            break
+
+        if index and sleep_seconds:
+            time.sleep(sleep_seconds)
 
         try:
-            html_text = fetch_text(session, list_url, settings.request_timeout)
+            html_text = fetch_text(session, list_url, request_timeout)
         except Exception as exc:
             errors.append(f"{list_url}: {exc}")
             continue
@@ -344,7 +382,7 @@ def discover_candidates(
             title = display_text(anchor.get_text(" ", strip=True))
             if not title or len(title) < 2 or len(title) > 140:
                 continue
-            if active_keywords and not has_keyword(title, active_keywords):
+            if active_keywords and list_url not in trusted_search_urls and not has_keyword(title, active_keywords):
                 continue
             if has_blocked_keyword(title, active_blocked_keywords):
                 continue
@@ -690,6 +728,9 @@ def crawl_source(
 
     items: list[dict[str, Any]] = []
     item_limit = source_item_limit(source, settings)
+    recent_hours = source_hours(source, settings)
+    sleep_seconds = source_sleep_seconds(source, settings)
+    detail_timeout = source_detail_timeout(source, settings)
     crawl_started = datetime.now(KST)
     for position, candidate in enumerate(candidates):
         if len(items) >= item_limit:
@@ -698,22 +739,32 @@ def crawl_source(
         candidate_published_at = candidate.get("publishedAt")
         if candidate_published_at and is_future_date(candidate_published_at, crawl_started):
             candidate_published_at = ""
+        if candidate_published_at and not is_recent(candidate_published_at, recent_hours):
+            continue
 
-        time.sleep(settings.sleep_seconds)
         try:
-            detail_html = fetch_text(session, candidate["url"], settings.detail_timeout)
-            soup = BeautifulSoup(detail_html, "html.parser")
-            detail_published_at = parse_published_at(soup)
-            published_at = candidate_published_at or detail_published_at
-            if published_at and is_future_date(published_at, crawl_started):
-                published_at = detail_published_at if detail_published_at != published_at else ""
-            date_source = "parsed" if published_at else "collected"
-            if not published_at:
-                published_at = (crawl_started - timedelta(seconds=position)).isoformat()
-            if not is_recent(published_at, settings.hours):
-                continue
+            if source.get("skip_detail"):
+                published_at = candidate_published_at
+                date_source = "parsed" if published_at else "collected"
+                if not published_at:
+                    published_at = (crawl_started - timedelta(seconds=position)).isoformat()
+                image_url = fallback_image_url(source, candidate["url"])
+            else:
+                if sleep_seconds:
+                    time.sleep(sleep_seconds)
+                detail_html = fetch_text(session, candidate["url"], detail_timeout)
+                soup = BeautifulSoup(detail_html, "html.parser")
+                detail_published_at = parse_published_at(soup)
+                published_at = candidate_published_at or detail_published_at
+                if published_at and is_future_date(published_at, crawl_started):
+                    published_at = detail_published_at if detail_published_at != published_at else ""
+                date_source = "parsed" if published_at else "collected"
+                if not published_at:
+                    published_at = (crawl_started - timedelta(seconds=position)).isoformat()
+                image_url = find_image_url(soup, candidate["url"]) or fallback_image_url(source, candidate["url"])
 
-            image_url = find_image_url(soup, candidate["url"]) or fallback_image_url(source, candidate["url"])
+            if not is_recent(published_at, recent_hours):
+                continue
             if not image_url:
                 continue
             if has_blocked_keyword(f"{candidate['title']} {candidate['url']} {image_url}", active_blocked_keywords):
@@ -769,6 +820,8 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
         if error:
             summary["error"] = error
         source_summaries.append(summary)
+        if error:
+            log(f"  ! {error}")
         log(f"  -> {len(items)} items")
         time.sleep(settings.sleep_seconds)
 

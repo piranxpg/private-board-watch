@@ -156,9 +156,12 @@
       "pages": 0,
       "page_param": "p",
       "search_url_template": "https://www.inven.co.kr/board/webzine/2097?iskin=webzine&name=subject&keyword={keyword}",
+      "search_keywords": ["후방", "약후", "ㅇㅎ", "ㅎㅂ", "비키니", "몸매"],
       "search_pages": 1,
-      "request_timeout": 8,
+      "request_timeout": 5,
+      "detail_timeout": 6,
       "sleep_seconds": 0.15,
+      "max_seconds": 120,
       "max_items_per_source": 12,
       "allow_missing_image": true,
       "link_allow_regex": ["^/board/webzine/2097/\\d+(?:\\?|$)"]
