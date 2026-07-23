@@ -378,8 +378,12 @@ def discover_candidates(
 
         soup = BeautifulSoup(html_text, "html.parser")
 
-        for anchor in soup.select("a[href]"):
-            title = display_text(anchor.get_text(" ", strip=True))
+        link_selector = str(source.get("link_selector") or "a[href]")
+        title_selector = str(source.get("title_selector") or "").strip()
+        date_selector = str(source.get("date_selector") or "").strip()
+        for anchor in soup.select(link_selector):
+            title_node = anchor.select_one(title_selector) if title_selector else anchor
+            title = display_text(title_node.get_text(" ", strip=True)) if title_node else ""
             if not title or len(title) < 2 or len(title) > 140:
                 continue
             if active_keywords and list_url not in trusted_search_urls and not has_keyword(title, active_keywords):
@@ -400,7 +404,13 @@ def discover_candidates(
                 continue
             seen.add(key)
             candidate = {"title": title, "url": url}
-            published_at = extract_candidate_published_at(anchor, url)
+            date_node = anchor.select_one(date_selector) if date_selector else None
+            published_at = (
+                extract_date_from_text(date_node.get_text(" ", strip=True))
+                if date_node
+                else ""
+            )
+            published_at = published_at or extract_candidate_published_at(anchor, url)
             if published_at:
                 candidate["publishedAt"] = published_at
             candidates.append(candidate)
@@ -519,6 +529,20 @@ def extract_date_from_text(value: str) -> str:
     text = display_text(value)
     if not text:
         return ""
+    if "방금" in text:
+        return datetime.now(KST).replace(microsecond=0).isoformat()
+    relative_match = re.search(r"(\d+)\s*(초|분|시간|일|주)\s*전", text)
+    if relative_match:
+        amount = int(relative_match.group(1))
+        unit = relative_match.group(2)
+        delta = {
+            "초": timedelta(seconds=amount),
+            "분": timedelta(minutes=amount),
+            "시간": timedelta(hours=amount),
+            "일": timedelta(days=amount),
+            "주": timedelta(weeks=amount),
+        }[unit]
+        return (datetime.now(KST) - delta).replace(microsecond=0).isoformat()
     for pattern in (
         r"(\d{4})[-./](\d{1,2})[-./](\d{1,2})\D{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?",
         r"(\d{2})[-./](\d{1,2})[-./](\d{1,2})\D{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?",
@@ -755,7 +779,10 @@ def crawl_source(
                 detail_html = fetch_text(session, candidate["url"], detail_timeout)
                 soup = BeautifulSoup(detail_html, "html.parser")
                 detail_published_at = parse_published_at(soup)
-                published_at = candidate_published_at or detail_published_at
+                if source.get("prefer_detail_date"):
+                    published_at = detail_published_at or candidate_published_at
+                else:
+                    published_at = candidate_published_at or detail_published_at
                 if published_at and is_future_date(published_at, crawl_started):
                     published_at = detail_published_at if detail_published_at != published_at else ""
                 date_source = "parsed" if published_at else "collected"
