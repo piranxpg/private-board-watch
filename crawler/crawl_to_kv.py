@@ -828,6 +828,8 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
     replace_source_ids: list[str] = []
     blocked_urls: list[str] = []
     blocked_url_regexes: list[str] = []
+    source_keyword_filters: dict[str, list[str]] = {}
+    source_retention_limits: dict[str, int] = {}
 
     for source in sorted(sources, key=lambda item: item.get("rank", 999)):
         log(f"crawl: {source.get('name', source['id'])}")
@@ -837,6 +839,11 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
         blocked_url_regexes.extend(source_blocked_url_regexes(source))
         if source.get("replace_existing"):
             replace_source_ids.append(source["id"])
+        active_keywords = source_keywords(source, keywords)
+        if source.get("filter_existing_by_keywords") and active_keywords:
+            source_keyword_filters[source["id"]] = active_keywords
+        if source.get("max_retained_items") is not None:
+            source_retention_limits[source["id"]] = max(1, int(source["max_retained_items"]))
         summary = {
             "id": source["id"],
             "name": source.get("name", source["id"]),
@@ -862,6 +869,8 @@ def build_payload(config: dict[str, Any]) -> dict[str, Any]:
         "_replaceSourceIds": replace_source_ids,
         "_blockedUrls": blocked_urls,
         "_blockedUrlRegexes": blocked_url_regexes,
+        "_sourceKeywordFilters": source_keyword_filters,
+        "_sourceRetentionLimits": source_retention_limits,
     }
 
 
@@ -886,10 +895,26 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
         for pattern in new_payload.get("_blockedUrlRegexes", [])
         if isinstance(pattern, str)
     ]
+    raw_keyword_filters = new_payload.get("_sourceKeywordFilters", {})
+    source_keyword_filters = {
+        source_id: [str(keyword) for keyword in source_keywords if str(keyword)]
+        for source_id, source_keywords in raw_keyword_filters.items()
+        if isinstance(source_id, str) and isinstance(source_keywords, list)
+    } if isinstance(raw_keyword_filters, dict) else {}
+    raw_retention_limits = new_payload.get("_sourceRetentionLimits", {})
+    source_retention_limits = {
+        source_id: max(1, int(limit))
+        for source_id, limit in raw_retention_limits.items()
+        if isinstance(source_id, str) and isinstance(limit, (int, float))
+    } if isinstance(raw_retention_limits, dict) else {}
 
     def is_blocked_item(item: dict[str, Any]) -> bool:
         link = item.get("link") or ""
         return link in blocked_urls or any(re.search(pattern, link) for pattern in blocked_url_regexes)
+
+    def passes_source_keyword_filter(item: dict[str, Any]) -> bool:
+        item_keywords = source_keyword_filters.get(item.get("sourceId"))
+        return not item_keywords or has_keyword(str(item.get("title") or ""), item_keywords)
 
     existing_items = existing_payload.get("items") if isinstance(existing_payload.get("items"), list) else []
     if active_source_ids:
@@ -905,6 +930,11 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
         if not isinstance(item, dict) or not is_blocked_item(item)
     ]
     existing_items = [
+        item
+        for item in existing_items
+        if not isinstance(item, dict) or passes_source_keyword_filter(item)
+    ]
+    existing_items = [
         repair_future_item_date(item) if isinstance(item, dict) else item
         for item in existing_items
     ]
@@ -915,11 +945,27 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
         if not isinstance(item, dict) or not is_blocked_item(item)
     ]
     new_items = [
+        item
+        for item in new_items
+        if not isinstance(item, dict) or passes_source_keyword_filter(item)
+    ]
+    new_items = [
         repair_future_item_date(item) if isinstance(item, dict) else item
         for item in new_items
     ]
     items = merge_new_and_existing_items(new_items, existing_items)
     sort_items_newest_first(items)
+    retained_counts: dict[str, int] = {}
+    retained_items: list[dict[str, Any]] = []
+    for item in items:
+        source_id = item.get("sourceId")
+        source_limit = source_retention_limits.get(source_id)
+        if source_limit is not None and retained_counts.get(source_id, 0) >= source_limit:
+            continue
+        retained_items.append(item)
+        if source_limit is not None:
+            retained_counts[source_id] = retained_counts.get(source_id, 0) + 1
+    items = retained_items
     items = items[: settings.max_total_items]
 
     existing_sources = existing_payload.get("sources") if isinstance(existing_payload.get("sources"), list) else []
@@ -947,6 +993,8 @@ def merge_payloads(existing_payload: dict[str, Any], new_payload: dict[str, Any]
     payload.pop("_replaceSourceIds", None)
     payload.pop("_blockedUrls", None)
     payload.pop("_blockedUrlRegexes", None)
+    payload.pop("_sourceKeywordFilters", None)
+    payload.pop("_sourceRetentionLimits", None)
     return payload
 
 
