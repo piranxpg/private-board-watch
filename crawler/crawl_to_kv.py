@@ -119,7 +119,7 @@ def source_item_limit(source: dict[str, Any], settings: CrawlSettings) -> int:
 
 def source_hours(source: dict[str, Any], settings: CrawlSettings) -> int:
     value = source.get("hours", settings.hours)
-    return max(1, int(value or settings.hours))
+    return 0 if value == 0 else max(1, int(value or settings.hours))
 
 
 def source_request_timeout(source: dict[str, Any], settings: CrawlSettings) -> int:
@@ -381,6 +381,8 @@ def discover_candidates(
         link_selector = str(source.get("link_selector") or "a[href]")
         title_selector = str(source.get("title_selector") or "").strip()
         date_selector = str(source.get("date_selector") or "").strip()
+        date_parent_tag = source.get("date_parent_tag")
+        list_fetched_at = datetime.now(KST)
         for anchor in soup.select(link_selector):
             title_node = anchor.select_one(title_selector) if title_selector else anchor
             title = display_text(title_node.get_text(" ", strip=True)) if title_node else ""
@@ -402,17 +404,21 @@ def discover_candidates(
                 continue
             if key in seen:
                 continue
-            seen.add(key)
             candidate = {"title": title, "url": url}
-            date_node = anchor.select_one(date_selector) if date_selector else None
-            published_at = (
-                extract_date_from_text(date_node.get_text(" ", strip=True))
-                if date_node
-                else ""
+            date_context = anchor.find_parent(date_parent_tag) if date_parent_tag else anchor
+            date_node = date_context.select_one(date_selector) if date_context and date_selector else None
+            published_at, date_precision = (
+                parse_list_date(date_node.get_text(" ", strip=True), list_fetched_at) if date_node else ("", "")
             )
-            published_at = published_at or extract_candidate_published_at(anchor, url)
+            if not published_at:
+                if source.get("require_list_date"):
+                    continue
+                published_at = extract_candidate_published_at(anchor, url)
             if published_at:
                 candidate["publishedAt"] = published_at
+            if date_precision:
+                candidate["datePrecision"] = date_precision
+            seen.add(key)
             candidates.append(candidate)
 
     if not candidates and errors:
@@ -578,6 +584,27 @@ def extract_date_from_text(value: str) -> str:
     return ""
 
 
+def parse_list_date(value: str, reference: datetime) -> tuple[str, str]:
+    value = display_text(value)
+    clock = re.fullmatch(r"(\d{1,2}):(\d{2})", value)
+    month_day = re.fullmatch(r"(\d{2})-(\d{2})", value)
+    try:
+        if clock:
+            hour, minute = map(int, clock.groups())
+            published = reference.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if published > reference:
+                published -= timedelta(days=1)
+            return published.isoformat(), ""
+        if month_day:
+            month, day = map(int, month_day.groups())
+            year = reference.year - ((month, day) > (reference.month, reference.day))
+            published = datetime(year, month, day, tzinfo=KST)
+            return published.isoformat(), "day"
+        return extract_date_from_text(value), ""
+    except ValueError:
+        return "", ""
+
+
 def extract_candidate_published_at(anchor: Any, url: str = "") -> str:
     parent = anchor
     for _ in range(5):
@@ -672,6 +699,8 @@ def repair_future_item_date(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_recent(value: str, hours: int) -> bool:
+    if hours == 0:
+        return True
     published = parse_iso_datetime(value)
     if not published:
         return True
@@ -763,6 +792,8 @@ def crawl_source(
         candidate_published_at = candidate.get("publishedAt")
         if candidate_published_at and is_future_date(candidate_published_at, crawl_started):
             candidate_published_at = ""
+        if source.get("require_list_date") and not candidate_published_at:
+            continue
         if candidate_published_at and not is_recent(candidate_published_at, recent_hours):
             continue
 
@@ -798,19 +829,20 @@ def crawl_source(
                 continue
 
             link = canonical_url(candidate["url"], source)
-            items.append(
-                {
-                    "id": f"{source['id']}:{hashlib.sha1(link.encode('utf-8')).hexdigest()[:12]}",
-                    "sourceId": source["id"],
-                    "sourceName": source.get("name", source["id"]),
-                    "title": candidate["title"],
-                    "link": link,
-                    "imageUrl": image_url,
-                    "publishedAt": published_at,
-                    "collectedAt": crawl_started.isoformat(),
-                    "dateSource": date_source,
-                }
-            )
+            item = {
+                "id": f"{source['id']}:{hashlib.sha1(link.encode('utf-8')).hexdigest()[:12]}",
+                "sourceId": source["id"],
+                "sourceName": source.get("name", source["id"]),
+                "title": candidate["title"],
+                "link": link,
+                "imageUrl": image_url,
+                "publishedAt": published_at,
+                "collectedAt": crawl_started.isoformat(),
+                "dateSource": date_source,
+            }
+            if candidate.get("datePrecision") and published_at == candidate_published_at:
+                item["datePrecision"] = candidate["datePrecision"]
+            items.append(item)
         except Exception as exc:
             log(f"  - detail skipped: {candidate['title'][:30]} / {exc}")
 

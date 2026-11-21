@@ -181,8 +181,9 @@ function createCard(item) {
   source.textContent = item.sourceName || item.sourceId || "source";
 
   if (item.publishedAt) {
-    time.dateTime = item.publishedAt;
-    time.textContent = formatDate(item.publishedAt);
+    const dateOnly = item.datePrecision === "day";
+    time.dateTime = dateOnly ? item.publishedAt.slice(0, 10) : item.publishedAt;
+    time.textContent = formatDate(item.publishedAt, dateOnly);
   } else {
     time.textContent = "";
   }
@@ -190,15 +191,14 @@ function createCard(item) {
   return node;
 }
 
-function formatDate(value) {
+function formatDate(value, dateOnly) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     month: "short",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    ...(!dateOnly && { hour: "2-digit", minute: "2-digit" }),
   }).format(date);
 }
 
