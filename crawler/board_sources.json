@@ -294,7 +294,7 @@
       "link_selector": "#listIssue table.aalist:not(.header) a.article[href]",
       "title_selector": ".title",
       "date_selector": ".time",
-      "link_allow_regex": ["^/issue/\\?(?:[^&]+&)*idx=\\d+(?:&|$)"]
+      "link_allow_regex": ["^/issue/\\?(?:[^&]+&)*idx=\\d+(?:_\\d+)?(?:&|$)"]
     },
     {
       "id": "slrclub-free",
