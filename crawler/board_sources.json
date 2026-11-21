@@ -278,6 +278,25 @@
       "link_allow": ["/bbs/view/"]
     },
     {
+      "id": "aagag-issue",
+      "name": "아아가그 이슈",
+      "rank": 11.8,
+      "url": "https://aagag.com/issue/",
+      "pages": 0,
+      "search_url_template": "https://aagag.com/issue/?word={keyword}",
+      "search_pages": 1,
+      "request_timeout": 7,
+      "max_seconds": 90,
+      "sleep_seconds": 0.35,
+      "skip_detail": true,
+      "allow_missing_image": true,
+      "require_list_date": true,
+      "link_selector": "#listIssue table.aalist:not(.header) a.article[href]",
+      "title_selector": ".title",
+      "date_selector": ".time",
+      "link_allow_regex": ["^/issue/\\?(?:[^&]+&)*idx=\\d+(?:&|$)"]
+    },
+    {
       "id": "slrclub-free",
       "name": "SLR클럽 자유게시판",
       "rank": 12,
